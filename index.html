@@ -202,12 +202,12 @@ let chartInstances = [];
 
 const crosshairPlugin = {
   id: 'crosshairPlugin',
-  afterDatasetsDraw(chart) {
+  afterDraw(chart) {
     const { ctx, chartArea } = chart;
     if (!chartArea) return;
 
-    const x = chart._hoverX;
-    const y = chart._hoverY;
+    const x = chart.$crosshairX;
+    const y = chart.$crosshairY;
 
     if (x == null || y == null) return;
 
@@ -226,7 +226,7 @@ const crosshairPlugin = {
     if (y >= chartArea.top && y <= chartArea.bottom) {
       ctx.beginPath();
       ctx.setLineDash([]);
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.4;
       ctx.strokeStyle = '#4f8cff';
       ctx.moveTo(chartArea.left, y);
       ctx.lineTo(chartArea.right, y);
@@ -238,6 +238,45 @@ const crosshairPlugin = {
 };
 
 Chart.register(crosshairPlugin);
+
+function bindCrosshair(chart) {
+  const canvas = chart.canvas;
+
+  const updateCrosshair = (evt) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = evt.clientX - rect.left;
+    const y = evt.clientY - rect.top;
+    const area = chart.chartArea;
+
+    if (!area) return;
+
+    if (x >= area.left && x <= area.right && y >= area.top && y <= area.bottom) {
+      chart.$crosshairX = x;
+      chart.$crosshairY = y;
+    } else {
+      chart.$crosshairX = null;
+      chart.$crosshairY = null;
+    }
+    chart.draw();
+  };
+
+  const clearCrosshair = () => {
+    chart.$crosshairX = null;
+    chart.$crosshairY = null;
+    chart.draw();
+  };
+
+  canvas.addEventListener('mousemove', updateCrosshair);
+  canvas.addEventListener('mouseleave', clearCrosshair);
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (!e.touches || !e.touches.length) return;
+    const touch = e.touches[0];
+    updateCrosshair({ clientX: touch.clientX, clientY: touch.clientY });
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', clearCrosshair);
+}
 
 function showStatus(msg){
   const box = document.getElementById('status');
@@ -295,35 +334,14 @@ function commonChartOptions(customTooltip) {
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
-    events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
-    onHover(event, activeElements, chart) {
-      const e = event?.native || event;
-      const area = chart.chartArea;
-      if (!e || !area) return;
-
-      const x = e.x;
-      const y = e.y;
-
-      if (
-        x >= area.left && x <= area.right &&
-        y >= area.top && y <= area.bottom
-      ) {
-        chart._hoverX = x;
-        chart._hoverY = y;
-      } else {
-        chart._hoverX = null;
-        chart._hoverY = null;
-      }
-      chart.draw();
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: customTooltip
-    },
     interaction: {
       mode: 'index',
       axis: 'x',
       intersect: false
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: customTooltip
     },
     scales: {
       x: {
@@ -387,13 +405,7 @@ function buildNetChart(canvasId, labels, netData){
     options: commonChartOptions(getTooltipConfig())
   });
 
-  const canvas = chart.canvas;
-  canvas.addEventListener('mouseleave', () => {
-    chart._hoverX = null;
-    chart._hoverY = null;
-    chart.draw();
-  });
-
+  bindCrosshair(chart);
   chartInstances.push(chart);
 }
 
@@ -452,13 +464,7 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
     options: commonChartOptions(ttConfig)
   });
 
-  const canvas = chart.canvas;
-  canvas.addEventListener('mouseleave', () => {
-    chart._hoverX = null;
-    chart._hoverY = null;
-    chart.draw();
-  });
-
+  bindCrosshair(chart);
   chartInstances.push(chart);
 }
 
@@ -591,7 +597,7 @@ function setR(m, el) {
 window.onload = function() {
   const source = resolveDataSource();
   if (!source) {
-    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 window.TAIFEX_DATA = [...]');
+    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
     return;
   }
 
