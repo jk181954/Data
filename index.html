@@ -1,3 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>台股籌碼分析</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="./taifex_data.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#06090f;--bg2:#0b1018;--bg3:#0f1520;
+  --bdr:#18222e;--bdr2:#1e2d3e;
+  --bull:#ff4d6d;--bear:#22c55e;--blue:#4f8cff;
+  --text:#f8fafc;--muted:#94a3b8;--muted2:#64748b;
+  --mono:'JetBrains Mono',monospace;--sans:'Noto Sans TC',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(var(--bdr) 1px,transparent 1px),linear-gradient(90deg,var(--bdr) 1px,transparent 1px);
+  background-size:40px 40px;opacity:.35;pointer-events:none;z-index:0
+}
+.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 14px 32px}
+
+header{display:flex;align-items:flex-end;justify-content:space-between;padding:20px 0 12px;gap:12px;flex-wrap:wrap}
+.header-left{flex:1;min-width:200px}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;font-weight:bold}
+h1{font-size:clamp(22px,3.2vw,40px);font-weight:900;letter-spacing:-.03em;line-height:1.05;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1 .accent{color:var(--blue)}
+.link-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:10px 18px;
+  min-height:44px;
+  border-radius:10px;
+  font-size:14px;
+  font-weight:900;
+  letter-spacing:.02em;
+  background:var(--blue);
+  color:#fff;
+  border:1px solid rgba(79,140,255,0.75);
+  text-decoration:none;
+  transition:all .2s ease;
+  vertical-align:middle;
+  box-shadow:0 8px 24px rgba(79,140,255,.28);
+}
+.link-btn:hover{
+  background:#6a9dff;
+  border-color:#6a9dff;
+  color:#fff;
+  transform:translateY(-1px);
+  box-shadow:0 12px 30px rgba(79,140,255,.38);
+}
+.link-btn:active{
+  transform:translateY(0);
+  box-shadow:0 6px 16px rgba(79,140,255,.24);
+}
+.header-right{display:flex;justify-content:flex-end;width:auto}
+
+.symbol-group{display:inline-flex;background:var(--bg3);border:1px solid var(--bdr2);border-radius:10px;padding:4px;flex-wrap:wrap}
+.s-tab{
+  padding:10px 16px;border-radius:8px;font-size:13px;font-family:var(--sans);
+  font-weight:800;cursor:pointer;border:none;color:var(--muted);background:transparent;transition:all .18s
+}
+.s-tab:hover{color:var(--text)}
+.s-tab.on{background:var(--blue);color:#fff}
+
+.toolbar{
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;
+  background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:14px 14px;margin-bottom:14px
+}
+.tool-left{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{
+  padding:8px 12px;border-radius:8px;font-size:13px;font-family:var(--mono);font-weight:800;
+  cursor:pointer;border:1px solid var(--bdr);color:var(--muted);background:transparent;transition:all .18s
+}
+.tab:hover{border-color:var(--bdr2);color:var(--text)}
+.tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
+
+#status{
+  display:none;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);
+  border:1px solid var(--bdr2);border-radius:10px;margin-bottom:12px;font-size:13px;color:#ff4d6d;font-weight:700
+}
+#status.show{display:flex}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.card{
+  background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;min-height:108px
+}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.card.bull::before{background:var(--bull)}
+.card.bear::before{background:var(--bear)}
+.card.gray::before{background:#8b95a7}
+.clabel{font-size:13px;color:#cbd5e1;font-weight:800;margin-bottom:8px}
+.cval{font-size:32px;font-weight:900;font-family:var(--mono);line-height:1.02;letter-spacing:.01em}
+.cval.bull{color:var(--bull)}
+.cval.bear{color:var(--bear)}
+.cval.gray{color:var(--text)}
+.csub{font-size:13px;color:var(--muted2);margin-top:8px;font-family:var(--mono)}
+
+.chart-grid-2{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.chartbox{
+  background:var(--bg2);border:1px solid var(--bdr);border-radius:16px;padding:16px 14px 14px;margin-bottom:12px
+}
+.ctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.ctitle-wrap{display:flex;flex-direction:column;gap:4px}
+.ctitle{font-size:16px;font-weight:900;color:var(--text)}
+.crange{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.leg{display:flex;gap:14px}
+.legitem{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:var(--muted)}
+.legdot{width:10px;height:10px;border-radius:3px}
+.canvas-wrap{position:relative;height:320px}
+canvas{display:block;width:100%!important;height:100%!important}
+
+@media(max-width:900px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .chart-grid-2{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  header{flex-direction:column;align-items:flex-start;}
+  .header-right{width:100%;margin-top:8px;}
+  .symbol-group{width:100%;display:flex;}
+  .s-tab{flex:1;text-align:center;padding:8px 4px;font-size:12px;}
+}
+@media(max-width:480px){
+  .cval{font-size:24px}
+  .tab{font-size:12px;padding:7px 8px}
+  .canvas-wrap{height:280px}
+  .link-btn{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="header-left">
+    <div class="eyebrow">TAIFEX · 10年期貨分析庫</div>
+    <h1>
+      台股 <span class="accent">籌碼分析</span>
+      <a href="https://jk181954.github.io/stock/" target="_blank" rel="noopener noreferrer" class="link-btn">前往選股網</a>
+    </h1>
+  </div>
+  <div class="header-right">
+    <div class="symbol-group" id="main-view-switcher">
+      <button class="s-tab on" data-view="inst" onclick="switchMainView('inst')">外資未平倉</button>
+      <button class="s-tab" data-view="near" onclick="switchMainView('near')">近月五大十大</button>
+      <button class="s-tab" data-view="allm" onclick="switchMainView('allm')">全月五大十大</button>
+    </div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="tool-left">
+    <div class="tabs">
+      <button class="tab" onclick="setR(1,this)">1M</button>
+      <button class="tab on" onclick="setR(3,this)">3M</button>
+      <button class="tab" onclick="setR(6,this)">6M</button>
+      <button class="tab" onclick="setR(12,this)">1Y</button>
+      <button class="tab" onclick="setR(24,this)">2Y</button>
+      <button class="tab" onclick="setR(60,this)">5Y</button>
+      <button class="tab" onclick="setR('all',this)">全部</button>
+    </div>
+  </div>
+</div>
+
+<div id="status"><span id="smsg"></span></div>
+
+<div class="stats">
+  <div class="card gray" id="c1"><div class="clabel" id="l1">—</div><div class="cval gray" id="v1">—</div><div class="csub" id="s1">—</div></div>
+  <div class="card gray" id="c2"><div class="clabel" id="l2">—</div><div class="cval gray" id="v2">—</div><div class="csub" id="s2">—</div></div>
+  <div class="card gray" id="c3"><div class="clabel" id="l3">—</div><div class="cval gray" id="v3">—</div><div class="csub" id="s3">—</div></div>
+  <div class="card gray" id="c4"><div class="clabel" id="l4">—</div><div class="cval gray" id="v4">—</div><div class="csub" id="s4">—</div></div>
+</div>
+
+<div id="inst-sub-tabs" style="margin-bottom:12px;">
+  <div class="symbol-group">
+    <button class="s-tab on" id="btn-sym-tx" onclick="switchInstSymbol('TX')">台指期（TX）</button>
+    <button class="s-tab" id="btn-sym-mtx" onclick="switchInstSymbol('MTX')">小型台指（MTX）</button>
+  </div>
+</div>
+
+<div id="charts-container"></div>
+
+</div>
+
 <script>
 let allData = [];
 let currentView = 'inst';
@@ -404,3 +599,5 @@ window.onload = function() {
   updateScreen();
 };
 </script>
+</body>
+</html>
