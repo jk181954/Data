@@ -206,30 +206,30 @@ const crosshairPlugin = {
     const { ctx, chartArea } = chart;
     if (!chartArea) return;
 
-    const x = chart.$crosshairX;
-    const y = chart.$crosshairY;
+    const snapX = chart.$crosshairSnapX;
+    const mouseY = chart.$crosshairMouseY;
 
-    if (x == null || y == null) return;
+    if (snapX == null || mouseY == null) return;
 
     ctx.save();
 
-    if (x >= chartArea.left && x <= chartArea.right) {
+    if (snapX >= chartArea.left && snapX <= chartArea.right) {
       ctx.beginPath();
       ctx.setLineDash([6, 6]);
       ctx.lineWidth = 1;
       ctx.strokeStyle = '#94a3b8';
-      ctx.moveTo(x, chartArea.top);
-      ctx.lineTo(x, chartArea.bottom);
+      ctx.moveTo(snapX, chartArea.top);
+      ctx.lineTo(snapX, chartArea.bottom);
       ctx.stroke();
     }
 
-    if (y >= chartArea.top && y <= chartArea.bottom) {
+    if (mouseY >= chartArea.top && mouseY <= chartArea.bottom) {
       ctx.beginPath();
       ctx.setLineDash([]);
       ctx.lineWidth = 1.4;
       ctx.strokeStyle = '#4f8cff';
-      ctx.moveTo(chartArea.left, y);
-      ctx.lineTo(chartArea.right, y);
+      ctx.moveTo(chartArea.left, mouseY);
+      ctx.lineTo(chartArea.right, mouseY);
       ctx.stroke();
     }
 
@@ -244,25 +244,40 @@ function bindCrosshair(chart) {
 
   const updateCrosshair = (evt) => {
     const rect = canvas.getBoundingClientRect();
-    const x = evt.clientX - rect.left;
-    const y = evt.clientY - rect.top;
+    const mouseX = evt.clientX - rect.left;
+    const mouseY = evt.clientY - rect.top;
     const area = chart.chartArea;
 
     if (!area) return;
 
-    if (x >= area.left && x <= area.right && y >= area.top && y <= area.bottom) {
-      chart.$crosshairX = x;
-      chart.$crosshairY = y;
-    } else {
-      chart.$crosshairX = null;
-      chart.$crosshairY = null;
+    if (!(mouseX >= area.left && mouseX <= area.right && mouseY >= area.top && mouseY <= area.bottom)) {
+      chart.$crosshairSnapX = null;
+      chart.$crosshairMouseY = null;
+      chart.draw();
+      return;
     }
+
+    const active = chart.getElementsAtEventForMode(
+      evt,
+      'index',
+      { intersect: false },
+      false
+    );
+
+    if (active && active.length) {
+      const el = active[0].element;
+      chart.$crosshairSnapX = el.x;
+    } else {
+      chart.$crosshairSnapX = null;
+    }
+
+    chart.$crosshairMouseY = mouseY;
     chart.draw();
   };
 
   const clearCrosshair = () => {
-    chart.$crosshairX = null;
-    chart.$crosshairY = null;
+    chart.$crosshairSnapX = null;
+    chart.$crosshairMouseY = null;
     chart.draw();
   };
 
