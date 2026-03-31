@@ -469,7 +469,7 @@ function setR(m, el) {
 window.onload = function() {
   const source = resolveDataSource();
   if (!source) {
-    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
+    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 window.TAIFEX_DATA = [...]');
     return;
   }
 
