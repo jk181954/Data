@@ -110,16 +110,39 @@ def main():
     print("=== 啟動台指期資料更新 ===")
 
     old_data = []
+    
+    # 1. 優先嘗試讀取 JSON 緩存檔
     if os.path.exists(JSON_FILE):
         with open(JSON_FILE, 'r', encoding='utf-8') as f:
             old_data = json.load(f)
-            print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
+        print(f"已讀取 JSON 歷史資料: 共 {len(old_data)} 筆")
+        
+    # 2. 如果沒有 JSON，但有原本的 JS 檔，就從 JS 檔提取
+    elif os.path.exists(JS_FILE):
+        print(f"找不到 JSON，嘗試從 {JS_FILE} 提取歷史資料...")
+        try:
+            with open(JS_FILE, 'r', encoding='utf-8') as f:
+                content = f.read()
+                start_idx = content.find('=')
+                if start_idx != -1:
+                    json_str = content[start_idx+1:].strip()
+                    if json_str.endswith(';'):
+                        json_str = json_str[:-1]
+                    
+                    parsed = json.loads(json_str)
+                    if isinstance(parsed, dict) and "data" in parsed:
+                        old_data = parsed["data"]
+                    elif isinstance(parsed, list):
+                        old_data = parsed
+                    print(f"成功從 JS 檔提取歷史資料: 共 {len(old_data)} 筆")
+        except Exception as e:
+            print(f"解析 JS 檔失敗: {e}")
 
     end_date = datetime.now().strftime('%Y/%m/%d')
 
     if len(old_data) == 0:
         start_date = (datetime.now() - timedelta(days=3650)).strftime('%Y/%m/%d')
-        print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {end_date}")
+        print(f"無歷史資料，準備抓取 10 年資料: {start_date} ~ {end_date}")
     else:
         start_date = (datetime.now() - timedelta(days=5)).strftime('%Y/%m/%d')
         print(f"執行增量更新: {start_date} ~ {end_date}")
@@ -136,11 +159,11 @@ def main():
     if len(final_data) > MAX_DAYS:
         final_data = final_data[:MAX_DAYS]
 
-    # 保留 json 檔案作為緩存
+    # 輸出 1: 保存 json 檔案 (後端純淨資料庫)
     with open(JSON_FILE, 'w', encoding='utf-8') as f:
         json.dump(final_data, f, ensure_ascii=False, separators=(',', ':'))
 
-    # 輸出包含時間戳的 JS 變數檔案
+    # 輸出 2: 保存包含時間戳的 JS 檔案 (前端載入用)
     output_payload = {
         "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "data": final_data
