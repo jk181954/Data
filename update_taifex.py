@@ -110,39 +110,35 @@ def main():
     print("=== 啟動台指期資料更新 ===")
 
     old_data = []
-    
-    # 1. 優先嘗試讀取 JSON 緩存檔
     if os.path.exists(JSON_FILE):
         with open(JSON_FILE, 'r', encoding='utf-8') as f:
-            old_data = json.load(f)
-        print(f"已讀取 JSON 歷史資料: 共 {len(old_data)} 筆")
-        
-    # 2. 如果沒有 JSON，但有原本的 JS 檔，就從 JS 檔提取
-    elif os.path.exists(JS_FILE):
-        print(f"找不到 JSON，嘗試從 {JS_FILE} 提取歷史資料...")
-        try:
-            with open(JS_FILE, 'r', encoding='utf-8') as f:
-                content = f.read()
-                start_idx = content.find('=')
-                if start_idx != -1:
-                    json_str = content[start_idx+1:].strip()
-                    if json_str.endswith(';'):
-                        json_str = json_str[:-1]
-                    
-                    parsed = json.loads(json_str)
-                    if isinstance(parsed, dict) and "data" in parsed:
-                        old_data = parsed["data"]
-                    elif isinstance(parsed, list):
-                        old_data = parsed
-                    print(f"成功從 JS 檔提取歷史資料: 共 {len(old_data)} 筆")
-        except Exception as e:
-            print(f"解析 JS 檔失敗: {e}")
+            content = f.read().strip()
+            # 如果檔案是空的，直接跳過
+            if content:
+                # 去除前端 JS 宣告的 "var myData = " 和結尾的 ";"
+                if content.startswith('var myData = '):
+                    content = content[len('var myData = '):]
+                if content.endswith(';'):
+                    content = content[:-1]
+                
+                try:
+                    parsed_json = json.loads(content)
+                    # 處理新格式：帶有 {"update_time":..., "data": [...]}
+                    if isinstance(parsed_json, dict) and "data" in parsed_json:
+                        old_data = parsed_json["data"]
+                    # 處理舊格式：純陣列 [...]
+                    elif isinstance(parsed_json, list):
+                        old_data = parsed_json
+                    print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
+                except json.JSONDecodeError as e:
+                    print(f"解析舊資料失敗，將重新抓取: {e}")
+                    old_data = []
 
     end_date = datetime.now().strftime('%Y/%m/%d')
 
     if len(old_data) == 0:
         start_date = (datetime.now() - timedelta(days=3650)).strftime('%Y/%m/%d')
-        print(f"無歷史資料，準備抓取 10 年資料: {start_date} ~ {end_date}")
+        print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {end_date}")
     else:
         start_date = (datetime.now() - timedelta(days=5)).strftime('%Y/%m/%d')
         print(f"執行增量更新: {start_date} ~ {end_date}")
@@ -159,27 +155,14 @@ def main():
     if len(final_data) > MAX_DAYS:
         final_data = final_data[:MAX_DAYS]
 
-    # 輸出 1: 保存 json 檔案 (後端純淨資料庫)
+    # 寫入成 JavaScript 變數格式
     with open(JSON_FILE, 'w', encoding='utf-8') as f:
-        # 把資料包進物件，並加上 update_time
         output_data = {
             "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "data": final_data
         }
-        # 轉成字串
         json_str = json.dumps(output_data, ensure_ascii=False, separators=(',', ':'))
-        # 寫入成 JavaScript 變數
         f.write(f"var myData = {json_str};")
-
-    # 輸出 2: 保存包含時間戳的 JS 檔案 (前端載入用)
-    output_payload = {
-        "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "data": final_data
-    }
-    with open(JS_FILE, 'w', encoding='utf-8') as f:
-        f.write("var myData = ")
-        json.dump(output_payload, f, ensure_ascii=False, separators=(',', ':'))
-        f.write(";")
 
     print(f"=== 更新完成！總筆數: {len(final_data)} 筆 ===")
 
