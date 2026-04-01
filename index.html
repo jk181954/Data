@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>台股籌碼分析</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="./taifex_data.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -483,11 +482,35 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
   chartInstances.push(chart);
 }
 
-function resolveDataSource(){
-  if (typeof myData !== 'undefined' && Array.isArray(myData)) return myData;
-  if (typeof TAIFEX_DATA !== 'undefined' && Array.isArray(TAIFEX_DATA)) return TAIFEX_DATA;
-  if (window.TAIFEX_DATA && Array.isArray(window.TAIFEX_DATA)) return window.TAIFEX_DATA;
-  return null;
+function resolveDataSource() {
+    let sourceData = null;
+    let updateTime = "";
+
+    // 支援新的 { update_time, data } 格式，同時相容舊版陣列格式
+    if (typeof myData !== 'undefined') {
+        if (myData && !Array.isArray(myData) && myData.data) {
+            updateTime = myData.update_time;
+            sourceData = myData.data;
+        } else if (Array.isArray(myData)) {
+            sourceData = myData;
+        }
+    } else if (typeof TAIFEXDATA !== 'undefined') {
+        sourceData = Array.isArray(TAIFEXDATA) ? TAIFEXDATA : TAIFEXDATA.data;
+        updateTime = TAIFEXDATA.update_time || "";
+    } else if (window.TAIFEXDATA) {
+        sourceData = Array.isArray(window.TAIFEXDATA) ? window.TAIFEXDATA : window.TAIFEXDATA.data;
+        updateTime = window.TAIFEXDATA.update_time || "";
+    }
+    
+    // 如果有時間戳，將它更新到畫面左上角的標題旁
+    if (updateTime) {
+        const eyebrow = document.querySelector('.eyebrow');
+        if (eyebrow) {
+            eyebrow.textContent = 'TAIFEX 10 (最後更新: ' + updateTime + ')';
+        }
+    }
+    
+    return sourceData;
 }
 
 function updateScreen() {
@@ -610,11 +633,25 @@ function setR(m, el) {
 }
 
 window.onload = function() {
-  const source = resolveDataSource();
-  if (!source) {
-    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
-    return;
-  }
+    // 透過動態創建 script 標籤並加上時間戳參數來載入，避免 GitHub Pages 快取問題
+    const script = document.createElement('script');
+    script.src = `./taifex_data.js?v=${new Date().getTime()}`;
+    document.head.appendChild(script);
+
+    script.onload = function() {
+        const source = resolveDataSource();
+        if (!source) {
+            showStatus('無法讀取資料，請確認 taifex_data.js 格式');
+            return;
+        }
+        allData = source.slice().reverse();
+        updateScreen();
+    };
+
+    script.onerror = function() {
+        showStatus('資料載入失敗，找不到 taifex_data.js 檔案');
+    };
+};
 
   allData = source.slice();
   updateScreen();
