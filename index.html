@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>台股籌碼分析</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="./taifex_data.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -199,99 +200,6 @@ let instSymbol = 'TX';
 let activeR = 3;
 let chartInstances = [];
 
-const crosshairPlugin = {
-  id: 'crosshairPlugin',
-  afterDraw(chart) {
-    const { ctx, chartArea } = chart;
-    if (!chartArea) return;
-
-    const snapX = chart.$crosshairSnapX;
-    const mouseY = chart.$crosshairMouseY;
-
-    if (snapX == null || mouseY == null) return;
-
-    ctx.save();
-
-    if (snapX >= chartArea.left && snapX <= chartArea.right) {
-      ctx.beginPath();
-      ctx.setLineDash([6, 6]);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = '#94a3b8';
-      ctx.moveTo(snapX, chartArea.top);
-      ctx.lineTo(snapX, chartArea.bottom);
-      ctx.stroke();
-    }
-
-    if (mouseY >= chartArea.top && mouseY <= chartArea.bottom) {
-      ctx.beginPath();
-      ctx.setLineDash([]);
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = '#4f8cff';
-      ctx.moveTo(chartArea.left, mouseY);
-      ctx.lineTo(chartArea.right, mouseY);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-};
-
-Chart.register(crosshairPlugin);
-
-function bindCrosshair(chart) {
-  const canvas = chart.canvas;
-
-  const updateCrosshair = (evt) => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = evt.clientX - rect.left;
-    const mouseY = evt.clientY - rect.top;
-    const area = chart.chartArea;
-
-    if (!area) return;
-
-    if (!(mouseX >= area.left && mouseX <= area.right && mouseY >= area.top && mouseY <= area.bottom)) {
-      chart.$crosshairSnapX = null;
-      chart.$crosshairMouseY = null;
-      chart.draw();
-      return;
-    }
-
-    const active = chart.getElementsAtEventForMode(
-      evt,
-      'index',
-      { intersect: false },
-      false
-    );
-
-    if (active && active.length) {
-      const el = active[0].element;
-      chart.$crosshairSnapX = el.x;
-    } else {
-      chart.$crosshairSnapX = null;
-    }
-
-    chart.$crosshairMouseY = mouseY;
-    chart.draw();
-  };
-
-  const clearCrosshair = () => {
-    chart.$crosshairSnapX = null;
-    chart.$crosshairMouseY = null;
-    chart.draw();
-  };
-
-  canvas.addEventListener('mousemove', updateCrosshair);
-  canvas.addEventListener('mouseleave', clearCrosshair);
-
-  canvas.addEventListener('touchmove', (e) => {
-    if (!e.touches || !e.touches.length) return;
-    const touch = e.touches[0];
-    updateCrosshair({ clientX: touch.clientX, clientY: touch.clientY });
-  }, { passive: true });
-
-  canvas.addEventListener('touchend', clearCrosshair);
-}
-
 function showStatus(msg){
   const box = document.getElementById('status');
   document.getElementById('smsg').textContent = msg;
@@ -343,46 +251,6 @@ function getTooltipConfig() {
   };
 }
 
-function commonChartOptions(customTooltip) {
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    interaction: {
-      mode: 'index',
-      axis: 'x',
-      intersect: false
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: customTooltip
-    },
-    scales: {
-      x: {
-        reverse: false,
-        ticks: {
-          color: '#94a3b8',
-          maxRotation: 45,
-          autoSkip: true,
-          maxTicksLimit: 12
-        },
-        grid: {
-          color: '#141e2a'
-        }
-      },
-      y: {
-        ticks: {
-          color: '#94a3b8',
-          callback: (v) => Number(v).toLocaleString()
-        },
-        grid: {
-          color: '#141e2a'
-        }
-      }
-    }
-  };
-}
-
 function chartBoxHTML(id, title, range, legendA, legendB){
   return `
     <div class="chartbox">
@@ -416,10 +284,20 @@ function buildNetChart(canvasId, labels, netData){
         categoryPercentage: 0.8
       }]
     },
-    options: commonChartOptions(getTooltipConfig())
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: getTooltipConfig()
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { color: '#141e2a' } },
+        y: { ticks: { color: '#94a3b8', callback: (v) => Number(v).toLocaleString() }, grid: { color: '#141e2a' } }
+      }
+    }
   });
-
-  bindCrosshair(chart);
   chartInstances.push(chart);
 }
 
@@ -433,10 +311,7 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
     title:(items)=>labels[items[0].dataIndex],
     label:(ctx)=>{
       const d = ctx.raw.raw;
-      return [
-        `多方 ${Number(d[lk]||0).toLocaleString()} 口`,
-        `空方 ${Number(d[sk]||0).toLocaleString()} 口`
-      ];
+      return [`多方 ${Number(d[lk]||0).toLocaleString()} 口`,`空方 ${Number(d[sk]||0).toLocaleString()} 口`];
     }
   };
 
@@ -447,70 +322,38 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
       datasets: [
         {
           label: '外層',
-          data: sliced.map(d => ({
-            x:d.date,
-            y:Math.max(d[lk]||0, d[sk]||0),
-            raw:d
-          })),
+          data: sliced.map(d => ({ x:d.date, y:Math.max(d[lk]||0, d[sk]||0), raw:d })),
           backgroundColor: sliced.map(d => ((d[lk]||0) >= (d[sk]||0) ? '#ff4d6d' : '#22c55e')),
-          grouped: false,
-          order: 2,
-          barPercentage: 0.72,
-          categoryPercentage: 0.8,
-          borderRadius: 2
+          grouped: false, order: 2, barPercentage: 0.72, categoryPercentage: 0.8, borderRadius: 2
         },
         {
           label: '內層',
-          data: sliced.map(d => ({
-            x:d.date,
-            y:Math.min(d[lk]||0, d[sk]||0),
-            raw:d
-          })),
+          data: sliced.map(d => ({ x:d.date, y:Math.min(d[lk]||0, d[sk]||0), raw:d })),
           backgroundColor: sliced.map(d => ((d[lk]||0) < (d[sk]||0) ? '#ff4d6d' : '#22c55e')),
-          grouped: false,
-          order: 1,
-          barPercentage: 0.42,
-          categoryPercentage: 0.8,
-          borderRadius: 2
+          grouped: false, order: 1, barPercentage: 0.42, categoryPercentage: 0.8, borderRadius: 2
         }
       ]
     },
-    options: commonChartOptions(ttConfig)
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', axis:'x', intersect: false },
+      plugins: { legend: { display: false }, tooltip: ttConfig },
+      scales: {
+        x: { ticks: { color: '#94a3b8', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { color: '#141e2a' } },
+        y: { ticks: { color: '#94a3b8', callback: (v) => Number(v).toLocaleString() }, grid: { color: '#141e2a' } }
+      }
+    }
   });
-
-  bindCrosshair(chart);
   chartInstances.push(chart);
 }
 
-function resolveDataSource() {
-    let sourceData = null;
-    let updateTime = "";
-
-    // 支援新的 { update_time, data } 格式，同時相容舊版陣列格式
-    if (typeof myData !== 'undefined') {
-        if (myData && !Array.isArray(myData) && myData.data) {
-            updateTime = myData.update_time;
-            sourceData = myData.data;
-        } else if (Array.isArray(myData)) {
-            sourceData = myData;
-        }
-    } else if (typeof TAIFEXDATA !== 'undefined') {
-        sourceData = Array.isArray(TAIFEXDATA) ? TAIFEXDATA : TAIFEXDATA.data;
-        updateTime = TAIFEXDATA.update_time || "";
-    } else if (window.TAIFEXDATA) {
-        sourceData = Array.isArray(window.TAIFEXDATA) ? window.TAIFEXDATA : window.TAIFEXDATA.data;
-        updateTime = window.TAIFEXDATA.update_time || "";
-    }
-    
-    // 如果有時間戳，將它更新到畫面左上角的標題旁
-    if (updateTime) {
-        const eyebrow = document.querySelector('.eyebrow');
-        if (eyebrow) {
-            eyebrow.textContent = 'TAIFEX 10 (最後更新: ' + updateTime + ')';
-        }
-    }
-    
-    return sourceData;
+function resolveDataSource(){
+  if (typeof myData !== 'undefined' && Array.isArray(myData)) return myData;
+  if (typeof TAIFEX_DATA !== 'undefined' && Array.isArray(TAIFEX_DATA)) return TAIFEX_DATA;
+  if (window.TAIFEX_DATA && Array.isArray(window.TAIFEX_DATA)) return window.TAIFEX_DATA;
+  return null;
 }
 
 function updateScreen() {
@@ -528,22 +371,14 @@ function updateScreen() {
   } else if (currentView === 'near') {
     parsed = allData.filter(d => d.near).map(d => ({
       date: d.date,
-      top5_l: d.near.top5_l || 0,
-      top5_s: d.near.top5_s || 0,
-      top5_n: d.near.top5_net || 0,
-      top10_l: d.near.top10_l || 0,
-      top10_s: d.near.top10_s || 0,
-      top10_n: d.near.top10_net || 0
+      top5_l: d.near.top5_l || 0, top5_s: d.near.top5_s || 0, top5_n: d.near.top5_net || 0,
+      top10_l: d.near.top10_l || 0, top10_s: d.near.top10_s || 0, top10_n: d.near.top10_net || 0
     }));
   } else {
     parsed = allData.filter(d => d.allm).map(d => ({
       date: d.date,
-      top5_l: d.allm.top5_l || 0,
-      top5_s: d.allm.top5_s || 0,
-      top5_n: d.allm.top5_net || 0,
-      top10_l: d.allm.top10_l || 0,
-      top10_s: d.allm.top10_s || 0,
-      top10_n: d.allm.top10_net || 0
+      top5_l: d.allm.top5_l || 0, top5_s: d.allm.top5_s || 0, top5_n: d.allm.top5_net || 0,
+      top10_l: d.allm.top10_l || 0, top10_s: d.allm.top10_s || 0, top10_n: d.allm.top10_net || 0
     }));
   }
 
@@ -561,10 +396,9 @@ function updateScreen() {
       return dt && dt >= cut;
     });
   }
+  if (!sliced.length) sliced = parsed.slice(-250);
 
-  if (!sliced.length) sliced = parsed.slice(0, 250);
-
-  const latest = sliced[0];
+  const latest = sliced[sliced.length - 1];
   const rangeText = getRangeText(sliced);
 
   if (currentView === 'inst') {
@@ -633,27 +467,13 @@ function setR(m, el) {
 }
 
 window.onload = function() {
-    // 透過動態創建 script 標籤並加上時間戳參數來載入，避免 GitHub Pages 快取問題
-    const script = document.createElement('script');
-    script.src = `./taifex_data.js?v=${new Date().getTime()}`;
-    document.head.appendChild(script);
+  const source = resolveDataSource();
+  if (!source) {
+    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
+    return;
+  }
 
-    script.onload = function() {
-        const source = resolveDataSource();
-        if (!source) {
-            showStatus('無法讀取資料，請確認 taifex_data.js 格式');
-            return;
-        }
-        allData = source.slice().reverse();
-        updateScreen();
-    };
-
-    script.onerror = function() {
-        showStatus('資料載入失敗，找不到 taifex_data.js 檔案');
-    };
-};
-
-  allData = source.slice();
+  allData = source.slice().reverse();
   updateScreen();
 };
 </script>
