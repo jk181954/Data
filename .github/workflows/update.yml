@@ -2,8 +2,9 @@ name: Daily Taifex Update
 
 on:
   schedule:
-    - cron: "30 8 * * 1-5"   # 台灣時間 16:30
-    - cron: "30 11 * * 1-5"  # 台灣時間 19:30
+    # 避開整點與半點尖峰，改成 UTC 08:35 (台灣 16:35) 與 UTC 11:35 (台灣 19:35)
+    - cron: "35 8 * * 1-5"   
+    - cron: "35 11 * * 1-5"  
   workflow_dispatch:
 
 permissions:
