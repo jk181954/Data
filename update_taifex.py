@@ -4,7 +4,7 @@ import os
 import time
 from datetime import datetime, timedelta
 
-JSON_FILE = 'taifexdata.json'
+JSON_FILE = 'taifex_data.js'
 JS_FILE = 'taifex_data.js'
 MAX_DAYS = 2500
 
@@ -161,7 +161,15 @@ def main():
 
     # 輸出 1: 保存 json 檔案 (後端純淨資料庫)
     with open(JSON_FILE, 'w', encoding='utf-8') as f:
-        json.dump(final_data, f, ensure_ascii=False, separators=(',', ':'))
+        # 把資料包進物件，並加上 update_time
+        output_data = {
+            "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "data": final_data
+        }
+        # 轉成字串
+        json_str = json.dumps(output_data, ensure_ascii=False, separators=(',', ':'))
+        # 寫入成 JavaScript 變數
+        f.write(f"var myData = {json_str};")
 
     # 輸出 2: 保存包含時間戳的 JS 檔案 (前端載入用)
     output_payload = {
