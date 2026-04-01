@@ -350,10 +350,12 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
 }
 
 function resolveDataSource() {
+  // 支援 myData 是一個物件，且裡面有 data 陣列的情況 (也就是你目前 taifex_data.js 的格式)
   if (typeof myData !== 'undefined') {
     if (Array.isArray(myData)) return myData;
     if (myData.data && Array.isArray(myData.data)) return myData.data;
   }
+  
   if (typeof TAIFEX_DATA !== 'undefined' && Array.isArray(TAIFEX_DATA)) return TAIFEX_DATA;
   if (window.TAIFEX_DATA && Array.isArray(window.TAIFEX_DATA)) return window.TAIFEX_DATA;
   return null;
