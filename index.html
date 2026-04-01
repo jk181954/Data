@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>台股籌碼分析</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="./taifex_data.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -349,132 +348,53 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
   chartInstances.push(chart);
 }
 
-function resolveDataSource(){
-  if (typeof myData !== 'undefined' && Array.isArray(myData)) return myData;
-  if (typeof TAIFEX_DATA !== 'undefined' && Array.isArray(TAIFEX_DATA)) return TAIFEX_DATA;
-  if (window.TAIFEX_DATA && Array.isArray(window.TAIFEX_DATA)) return window.TAIFEX_DATA;
-  return null;
-}
+function resolveDataSource() {
+  let sourceData = null;
+  let updateTime = "";
 
-function updateScreen() {
-  if (!allData.length) return;
-
-  let parsed = [];
-  if (currentView === 'inst') {
-    const k = instSymbol === 'TX' ? 'inst_tx' : 'inst_mtx';
-    parsed = allData.filter(d => d[k]).map(d => ({
-      date: d.date,
-      l: d[k].long || 0,
-      s: d[k].short || 0,
-      n: d[k].net || 0
-    }));
-  } else if (currentView === 'near') {
-    parsed = allData.filter(d => d.near).map(d => ({
-      date: d.date,
-      top5_l: d.near.top5_l || 0, top5_s: d.near.top5_s || 0, top5_n: d.near.top5_net || 0,
-      top10_l: d.near.top10_l || 0, top10_s: d.near.top10_s || 0, top10_n: d.near.top10_net || 0
-    }));
-  } else {
-    parsed = allData.filter(d => d.allm).map(d => ({
-      date: d.date,
-      top5_l: d.allm.top5_l || 0, top5_s: d.allm.top5_s || 0, top5_n: d.allm.top5_net || 0,
-      top10_l: d.allm.top10_l || 0, top10_s: d.allm.top10_s || 0, top10_n: d.allm.top10_net || 0
-    }));
+  if (typeof myData !== 'undefined') {
+    if (myData && !Array.isArray(myData) && myData.data) {
+      updateTime = myData.update_time;
+      sourceData = myData.data;
+    } else if (Array.isArray(myData)) {
+      sourceData = myData;
+    }
+  } else if (typeof TAIFEX_DATA !== 'undefined') {
+    sourceData = Array.isArray(TAIFEX_DATA) ? TAIFEX_DATA : TAIFEX_DATA.data;
+    updateTime = TAIFEX_DATA.update_time || "";
+  } else if (window.TAIFEX_DATA) {
+    sourceData = Array.isArray(window.TAIFEX_DATA) ? window.TAIFEX_DATA : window.TAIFEX_DATA.data;
+    updateTime = window.TAIFEX_DATA.update_time || "";
   }
 
-  if (!parsed.length) {
-    showStatus('資料來源存在，但解析後為 0 筆，請檢查 taifex_data.js 內容結構');
-    return;
+  if (updateTime) {
+    const eyebrow = document.querySelector('.eyebrow');
+    if (eyebrow) {
+      eyebrow.textContent = 'TAIFEX 10 (最後更新: ' + updateTime + ')';
+    }
   }
 
-  let sliced = parsed;
-  if (activeR !== 'all') {
-    const cut = new Date();
-    cut.setMonth(cut.getMonth() - activeR);
-    sliced = parsed.filter(d => {
-      const dt = parseDateSafe(d.date);
-      return dt && dt >= cut;
-    });
-  }
-  if (!sliced.length) sliced = parsed.slice(-250);
-
-  const latest = sliced[sliced.length - 1];
-  const rangeText = getRangeText(sliced);
-
-  if (currentView === 'inst') {
-    setCard(1, '最新淨額', latest.n, latest.date, latest.n >= 0 ? 'bull' : 'bear');
-    setCard(2, '多方天數', sliced.filter(x => x.n > 0).length, '所選區間', 'bull');
-    setCard(3, '多方口數', latest.l, '口數', 'gray');
-    setCard(4, '空方口數', latest.s, '口數', 'gray');
-  } else {
-    setCard(1, '前五大淨額', latest.top5_n, latest.date, latest.top5_n >= 0 ? 'bull' : 'bear');
-    setCard(2, '前十大淨額', latest.top10_n, latest.date, latest.top10_n >= 0 ? 'bull' : 'bear');
-    setCard(3, '前五大買方', latest.top5_l, '口數', 'gray');
-    setCard(4, '前五大賣方', latest.top5_s, '口數', 'gray');
-  }
-
-  const container = document.getElementById('charts-container');
-  destroyAllCharts();
-  const labels = sliced.map(d => d.date);
-
-  if(currentView === 'inst'){
-    container.innerHTML = `
-      <div class="chart-grid-2">
-        ${chartBoxHTML('inst-net', `外資 ${instSymbol} 多空淨額`, rangeText, '淨多', '淨空')}
-        ${chartBoxHTML('inst-ov', `外資 ${instSymbol} 多空未平倉重疊圖`, rangeText, '多方', '空方')}
-      </div>
-    `;
-    buildNetChart('canvas-inst-net', labels, sliced.map(d=>d.n));
-    buildOverlapChart('canvas-inst-ov', sliced, 'l', 's');
-  } else {
-    const lbl = currentView === 'near' ? '近月' : '全月';
-    container.innerHTML = `
-      <div class="chart-grid-2">
-        ${chartBoxHTML('top5-net', `${lbl}前五大淨額`, rangeText, '淨多', '淨空')}
-        ${chartBoxHTML('top5-ov', `${lbl}前五大買賣方重疊圖`, rangeText, '買方', '賣方')}
-        ${chartBoxHTML('top10-net', `${lbl}前十大淨額`, rangeText, '淨多', '淨空')}
-        ${chartBoxHTML('top10-ov', `${lbl}前十大買賣方重疊圖`, rangeText, '買方', '賣方')}
-      </div>
-    `;
-    buildNetChart('canvas-top5-net', labels, sliced.map(d=>d.top5_n));
-    buildOverlapChart('canvas-top5-ov', sliced, 'top5_l', 'top5_s');
-    buildNetChart('canvas-top10-net', labels, sliced.map(d=>d.top10_n));
-    buildOverlapChart('canvas-top10-ov', sliced, 'top10_l', 'top10_s');
-  }
-
-  hideStatus();
-}
-
-function switchMainView(view) {
-  currentView = view;
-  document.querySelectorAll('#main-view-switcher .s-tab').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  document.getElementById('inst-sub-tabs').style.display = view === 'inst' ? 'block' : 'none';
-  updateScreen();
-}
-
-function switchInstSymbol(sym) {
-  instSymbol = sym;
-  document.getElementById('btn-sym-tx').classList.toggle('on', sym === 'TX');
-  document.getElementById('btn-sym-mtx').classList.toggle('on', sym === 'MTX');
-  updateScreen();
-}
-
-function setR(m, el) {
-  activeR = m;
-  document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
-  el.classList.add('on');
-  updateScreen();
+  return sourceData;
 }
 
 window.onload = function() {
-  const source = resolveDataSource();
-  if (!source) {
-    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
-    return;
-  }
+  const script = document.createElement('script');
+  script.src = `./taifex_data.js?v=${new Date().getTime()}`;
+  document.head.appendChild(script);
 
-  allData = source.slice().reverse();
-  updateScreen();
+  script.onload = function() {
+    const source = resolveDataSource();
+    if (!source) {
+      showStatus('已載入 taifex_data.js，但找不到正確的資料格式。');
+      return;
+    }
+    allData = source.slice().reverse();
+    updateScreen();
+  };
+
+  script.onerror = function() {
+    showStatus('資料載入失敗，找不到 taifex_data.js 檔案');
+  };
 };
 </script>
 </body>
