@@ -1,624 +1,274 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>台股籌碼分析</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="./taifex_data.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#06090f;--bg2:#0b1018;--bg3:#0f1520;
-  --bdr:#18222e;--bdr2:#1e2d3e;
-  --bull:#ff4d6d;--bear:#22c55e;--blue:#4f8cff;
-  --text:#f8fafc;--muted:#94a3b8;--muted2:#64748b;
-  --mono:'JetBrains Mono',monospace;--sans:'Noto Sans TC',sans-serif;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
-body::before{
-  content:'';position:fixed;inset:0;
-  background-image:linear-gradient(var(--bdr) 1px,transparent 1px),linear-gradient(90deg,var(--bdr) 1px,transparent 1px);
-  background-size:40px 40px;opacity:.35;pointer-events:none;z-index:0
-}
-.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 14px 32px}
-
-header{display:flex;align-items:flex-end;justify-content:space-between;padding:20px 0 12px;gap:12px;flex-wrap:wrap}
-.header-left{flex:1;min-width:200px}
-.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;font-weight:bold}
-h1{font-size:clamp(22px,3.2vw,40px);font-weight:900;letter-spacing:-.03em;line-height:1.05;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-h1 .accent{color:var(--blue)}
-.link-btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  padding:10px 18px;
-  min-height:44px;
-  border-radius:10px;
-  font-size:14px;
-  font-weight:900;
-  letter-spacing:.02em;
-  background:var(--blue);
-  color:#fff;
-  border:1px solid rgba(79,140,255,0.75);
-  text-decoration:none;
-  transition:all .2s ease;
-  vertical-align:middle;
-  box-shadow:0 8px 24px rgba(79,140,255,.28);
-}
-.link-btn:hover{
-  background:#6a9dff;
-  border-color:#6a9dff;
-  color:#fff;
-  transform:translateY(-1px);
-  box-shadow:0 12px 30px rgba(79,140,255,.38);
-}
-.link-btn:active{
-  transform:translateY(0);
-  box-shadow:0 6px 16px rgba(79,140,255,.24);
-}
-.header-right{display:flex;justify-content:flex-end;width:auto}
-
-.symbol-group{display:inline-flex;background:var(--bg3);border:1px solid var(--bdr2);border-radius:10px;padding:4px;flex-wrap:wrap}
-.s-tab{
-  padding:10px 16px;border-radius:8px;font-size:13px;font-family:var(--sans);
-  font-weight:800;cursor:pointer;border:none;color:var(--muted);background:transparent;transition:all .18s
-}
-.s-tab:hover{color:var(--text)}
-.s-tab.on{background:var(--blue);color:#fff}
-
-.toolbar{
-  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:14px 14px;margin-bottom:14px
-}
-.tool-left{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
-.tabs{display:flex;gap:6px;flex-wrap:wrap}
-.tab{
-  padding:8px 12px;border-radius:8px;font-size:13px;font-family:var(--mono);font-weight:800;
-  cursor:pointer;border:1px solid var(--bdr);color:var(--muted);background:transparent;transition:all .18s
-}
-.tab:hover{border-color:var(--bdr2);color:var(--text)}
-.tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
-
-#status{
-  display:none;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);
-  border:1px solid var(--bdr2);border-radius:10px;margin-bottom:12px;font-size:13px;color:#ff4d6d;font-weight:700
-}
-#status.show{display:flex}
-
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.card{
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;min-height:108px
-}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.card.bull::before{background:var(--bull)}
-.card.bear::before{background:var(--bear)}
-.card.gray::before{background:#8b95a7}
-.clabel{font-size:13px;color:#cbd5e1;font-weight:800;margin-bottom:8px}
-.cval{font-size:32px;font-weight:900;font-family:var(--mono);line-height:1.02;letter-spacing:.01em}
-.cval.bull{color:var(--bull)}
-.cval.bear{color:var(--bear)}
-.cval.gray{color:var(--text)}
-.csub{font-size:13px;color:var(--muted2);margin-top:8px;font-family:var(--mono)}
-
-.chart-grid-2{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:12px;
-}
-.chartbox{
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:16px;padding:16px 14px 14px;margin-bottom:12px
-}
-.ctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px}
-.ctitle-wrap{display:flex;flex-direction:column;gap:4px}
-.ctitle{font-size:16px;font-weight:900;color:var(--text)}
-.crange{font-size:12px;color:var(--muted);font-family:var(--mono)}
-.leg{display:flex;gap:14px}
-.legitem{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:var(--muted)}
-.legdot{width:10px;height:10px;border-radius:3px}
-.canvas-wrap{position:relative;height:320px}
-canvas{display:block;width:100%!important;height:100%!important}
-
-@media(max-width:900px){
-  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .chart-grid-2{grid-template-columns:1fr}
-}
-@media(max-width:600px){
-  header{flex-direction:column;align-items:flex-start;}
-  .header-right{width:100%;margin-top:8px;}
-  .symbol-group{width:100%;display:flex;}
-  .s-tab{flex:1;text-align:center;padding:8px 4px;font-size:12px;}
-}
-@media(max-width:480px){
-  .cval{font-size:24px}
-  .tab{font-size:12px;padding:7px 8px}
-  .canvas-wrap{height:280px}
-  .link-btn{width:100%}
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台股技術面選股系統</title>
+    <style>
+        body { font-family: "Microsoft JhengHei", Arial, sans-serif; background-color: #f0f2f5; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; color: #1a237e; }
+        .top-actions { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
+        .btn-link { padding: 10px 20px; background-color: #1a237e; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; text-decoration: none; transition: all 0.2s; }
+        .btn-link:hover { background-color: #0d47a1; }
+        .btn-green { background-color: #198754; }
+        .btn-green:hover { background-color: #157347; }
+        .strategy-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; justify-content: center; }
+        .tab-btn { padding: 10px 15px; background-color: #e0e0e0; color: #555; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+        .tab-btn.active { background-color: #d32f2f; color: white; box-shadow: 0 2px 4px rgba(211,47,47,0.3); }
+        .explanation-box { background-color: #ffffff; border-left: 5px solid #198754; border-radius: 6px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: none; animation: fadeIn 0.3s; }
+        .explanation-box h3 { margin-top: 0; color: #198754; }
+        .explanation-box ul { margin-bottom: 0; line-height: 1.6; }
+        .info-panel { background-color: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; font-size: 16px; }
+        .update-time { color: #666; font-size: 14px; margin-top: 5px; }
+        .data-date-warning { margin-top: 8px; padding: 8px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; font-size: 14px; }
+        .data-date-warning.yesterday { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .data-date-warning.today { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+        table { width: 100%; border-collapse: collapse; background-color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px 10px; text-align: center; border-bottom: 1px solid #ddd; }
+        th { background-color: #1a237e; color: white; }
+        tr:hover { background-color: #f5f5f5; }
+        .pass { color: #d32f2f; font-weight: bold; }
+        .market-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; }
+        .badge-twse { background-color: #0288d1; }
+        .badge-tpex { background-color: #f57c00; }
+        .loading { text-align: center; font-size: 18px; color: #666; padding: 40px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 768px) { th, td { padding: 8px 5px; font-size: 14px; } .hide-on-mobile { display: none; } }
+    </style>
 </head>
 <body>
-<div class="wrap">
 
-<header>
-  <div class="header-left">
-    <div class="eyebrow">TAIFEX · 10年期貨分析庫</div>
-    <h1>
-      台股 <span class="accent">籌碼分析</span>
-      <a href="https://jk181954.github.io/stock/" target="_blank" rel="noopener noreferrer" class="link-btn">前往選股網</a>
-    </h1>
-  </div>
-  <div class="header-right">
-    <div class="symbol-group" id="main-view-switcher">
-      <button class="s-tab on" data-view="inst" onclick="switchMainView('inst')">外資未平倉</button>
-      <button class="s-tab" data-view="near" onclick="switchMainView('near')">近月五大十大</button>
-      <button class="s-tab" data-view="allm" onclick="switchMainView('allm')">全月五大十大</button>
+    <h1>📈 台股技術面選股系統</h1>
+
+    <div class="top-actions">
+        <a href="https://jk181954.github.io/Data/" target="_blank" class="btn-link">📊 前往台股籌碼</a>
+        <button onclick="toggleExplanation()" class="btn-link btn-green">📝 策略條件說明</button>
     </div>
-  </div>
-</header>
 
-<div class="toolbar">
-  <div class="tool-left">
-    <div class="tabs">
-      <button class="tab" onclick="setR(1,this)">1M</button>
-      <button class="tab on" onclick="setR(3,this)">3M</button>
-      <button class="tab" onclick="setR(6,this)">6M</button>
-      <button class="tab" onclick="setR(12,this)">1Y</button>
-      <button class="tab" onclick="setR(24,this)">2Y</button>
-      <button class="tab" onclick="setR(60,this)">5Y</button>
-      <button class="tab" onclick="setR('all',this)">全部</button>
+    <div id="strategy-explanation" class="explanation-box">
+        <h3 id="exp-title">💡 策略 1：量縮測底完成 說明</h3>
+        <ul id="exp-content">
+            <li>收盤價 > 5日、20日、60日均線</li>
+            <li>20日最低收盤價 < 20日最低20MA (代表曾回測破線)</li>
+            <li>成交張數 > 500 張</li>
+            <li>收盤價 < 200日均線 × 1.4 (限制乖離)</li>
+            <li>200日均線 (年線) 連續 10 日上升</li>
+        </ul>
     </div>
-  </div>
-</div>
 
-<div id="status"><span id="smsg"></span></div>
-
-<div class="stats">
-  <div class="card gray" id="c1"><div class="clabel" id="l1">—</div><div class="cval gray" id="v1">—</div><div class="csub" id="s1">—</div></div>
-  <div class="card gray" id="c2"><div class="clabel" id="l2">—</div><div class="cval gray" id="v2">—</div><div class="csub" id="s2">—</div></div>
-  <div class="card gray" id="c3"><div class="clabel" id="l3">—</div><div class="cval gray" id="v3">—</div><div class="csub" id="s3">—</div></div>
-  <div class="card gray" id="c4"><div class="clabel" id="l4">—</div><div class="cval gray" id="v4">—</div><div class="csub" id="s4">—</div></div>
-</div>
-
-<div id="inst-sub-tabs" style="margin-bottom:12px;">
-  <div class="symbol-group">
-    <button class="s-tab on" id="btn-sym-tx" onclick="switchInstSymbol('TX')">台指期（TX）</button>
-    <button class="s-tab" id="btn-sym-mtx" onclick="switchInstSymbol('MTX')">小型台指（MTX）</button>
-  </div>
-</div>
-
-<div id="charts-container"></div>
-
-</div>
-
-<script>
-let allData = [];
-let currentView = 'inst';
-let instSymbol = 'TX';
-let activeR = 3;
-let chartInstances = [];
-
-const crosshairPlugin = {
-  id: 'crosshairPlugin',
-  afterDraw(chart) {
-    const { ctx, chartArea } = chart;
-    if (!chartArea) return;
-
-    const snapX = chart.$crosshairSnapX;
-    const mouseY = chart.$crosshairMouseY;
-
-    if (snapX == null || mouseY == null) return;
-
-    ctx.save();
-
-    if (snapX >= chartArea.left && snapX <= chartArea.right) {
-      ctx.beginPath();
-      ctx.setLineDash([6, 6]);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = '#94a3b8';
-      ctx.moveTo(snapX, chartArea.top);
-      ctx.lineTo(snapX, chartArea.bottom);
-      ctx.stroke();
-    }
-
-    if (mouseY >= chartArea.top && mouseY <= chartArea.bottom) {
-      ctx.beginPath();
-      ctx.setLineDash([]);
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = '#4f8cff';
-      ctx.moveTo(chartArea.left, mouseY);
-      ctx.lineTo(chartArea.right, mouseY);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-};
-
-Chart.register(crosshairPlugin);
-
-function bindCrosshair(chart) {
-  const canvas = chart.canvas;
-
-  const updateCrosshair = (evt) => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = evt.clientX - rect.left;
-    const mouseY = evt.clientY - rect.top;
-    const area = chart.chartArea;
-
-    if (!area) return;
-
-    if (!(mouseX >= area.left && mouseX <= area.right && mouseY >= area.top && mouseY <= area.bottom)) {
-      chart.$crosshairSnapX = null;
-      chart.$crosshairMouseY = null;
-      chart.draw();
-      return;
-    }
-
-    const active = chart.getElementsAtEventForMode(
-      evt,
-      'index',
-      { intersect: false },
-      false
-    );
-
-    if (active && active.length) {
-      const el = active[0].element;
-      chart.$crosshairSnapX = el.x;
-    } else {
-      chart.$crosshairSnapX = null;
-    }
-
-    chart.$crosshairMouseY = mouseY;
-    chart.draw();
-  };
-
-  const clearCrosshair = () => {
-    chart.$crosshairSnapX = null;
-    chart.$crosshairMouseY = null;
-    chart.draw();
-  };
-
-  canvas.addEventListener('mousemove', updateCrosshair);
-  canvas.addEventListener('mouseleave', clearCrosshair);
-
-  canvas.addEventListener('touchmove', (e) => {
-    if (!e.touches || !e.touches.length) return;
-    const touch = e.touches[0];
-    updateCrosshair({ clientX: touch.clientX, clientY: touch.clientY });
-  }, { passive: true });
-
-  canvas.addEventListener('touchend', clearCrosshair);
-}
-
-function showStatus(msg){
-  const box = document.getElementById('status');
-  document.getElementById('smsg').textContent = msg;
-  box.classList.add('show');
-}
-
-function hideStatus(){
-  document.getElementById('status').classList.remove('show');
-}
-
-function parseDateSafe(str){
-  if(!str) return null;
-  const p = str.split('/');
-  if(p.length !== 3) return new Date(str);
-  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
-}
-
-function setCard(idx, label, val, sub, tone=null){
-  document.getElementById(`l${idx}`).textContent = label;
-  document.getElementById(`v${idx}`).textContent = typeof val === 'number' ? val.toLocaleString() : val;
-  document.getElementById(`s${idx}`).textContent = sub || '—';
-  document.getElementById(`c${idx}`).className = `card ${tone || 'gray'}`;
-  document.getElementById(`v${idx}`).className = `cval ${tone || 'gray'}`;
-}
-
-function destroyAllCharts(){
-  chartInstances.forEach(ch => { if(ch) ch.destroy(); });
-  chartInstances = [];
-}
-
-function getRangeText(sliced){
-  if(!sliced || !sliced.length) return '--';
-  return `${sliced[0].date} → ${sliced[sliced.length - 1].date}`;
-}
-
-function getTooltipConfig() {
-  return {
-    backgroundColor:'#0b1018',
-    borderColor:'#1e2d3e',
-    borderWidth:1,
-    padding:16,
-    cornerRadius:10,
-    caretSize:8,
-    titleColor:'#fff',
-    bodyColor:'#fff',
-    titleFont:{ size:17, weight:'bold', family:'Noto Sans TC' },
-    bodyFont:{ size:16, weight:'bold', family:'Noto Sans TC' },
-    displayColors:false
-  };
-}
-
-function commonChartOptions(customTooltip) {
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    interaction: {
-      mode: 'index',
-      axis: 'x',
-      intersect: false
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: customTooltip
-    },
-    scales: {
-      x: {
-        reverse: false,
-        ticks: {
-          color: '#94a3b8',
-          maxRotation: 45,
-          autoSkip: true,
-          maxTicksLimit: 12
-        },
-        grid: {
-          color: '#141e2a'
-        }
-      },
-      y: {
-        ticks: {
-          color: '#94a3b8',
-          callback: (v) => Number(v).toLocaleString()
-        },
-        grid: {
-          color: '#141e2a'
-        }
-      }
-    }
-  };
-}
-
-function chartBoxHTML(id, title, range, legendA, legendB){
-  return `
-    <div class="chartbox">
-      <div class="ctop">
-        <div class="ctitle-wrap">
-          <span class="ctitle">${title}</span>
-          <span class="crange">${range}</span>
-        </div>
-        <div class="leg">
-          <div class="legitem"><div class="legdot" style="background:var(--bull)"></div>${legendA}</div>
-          <div class="legitem"><div class="legdot" style="background:var(--bear)"></div>${legendB}</div>
-        </div>
-      </div>
-      <div class="canvas-wrap"><canvas id="canvas-${id}"></canvas></div>
+    <div class="strategy-tabs">
+        <button class="tab-btn active" onclick="switchStrategy(1, this)">1. 量縮測底完成</button>
+        <button class="tab-btn" onclick="switchStrategy(2, this)">2. 空轉多拉回</button>
+        <button class="tab-btn" onclick="switchStrategy(3, this)">3. 待更新</button>
+        <button class="tab-btn" onclick="switchStrategy(4, this)">4. 待更新</button>
+        <button class="tab-btn" onclick="switchStrategy(5, this)">5. 待更新</button>
     </div>
-  `;
-}
 
-function buildNetChart(canvasId, labels, netData){
-  const ctx = document.getElementById(canvasId).getContext('2d');
-  const chart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: '淨額',
-        data: netData,
-        backgroundColor: netData.map(v => v >= 0 ? '#ff4d6d' : '#22c55e'),
-        borderRadius: 3,
-        barPercentage: 0.72,
-        categoryPercentage: 0.8
-      }]
-    },
-    options: commonChartOptions(getTooltipConfig())
-  });
+    <div class="info-panel">
+        <div style="margin-bottom: 8px;">總計掃描市場上：<span id="total-scanned" style="color:#1a237e; font-weight:bold;">0</span> 檔股票</div>
+        <div>目前符合 [<span id="current-strategy-name">1. 量縮測底完成</span>] 的股票總數：<span id="stock-count" style="color:#d32f2f; font-weight:bold; font-size:20px;">0</span> 檔</div>
+        <div id="update-time" class="update-time">資料更新時間：載入中...</div>
+        <div id="data-date-info" class="data-date-warning"></div>
+    </div>
 
-  bindCrosshair(chart);
-  chartInstances.push(chart);
-}
+    <div id="loading" class="loading">資料載入中，請稍候...</div>
 
-function buildOverlapChart(canvasId, sliced, lk, sk){
-  const ctx = document.getElementById(canvasId).getContext('2d');
-  const labels = sliced.map(d => d.date);
+    <table id="stock-table" style="display: none;">
+        <thead>
+            <tr>
+                <th>代號</th>
+                <th>名稱</th>
+                <th class="hide-on-mobile">市場</th>
+                <th>收盤價</th>
+                <th>成交量</th>
+                <th class="hide-on-mobile">資料日</th>
+                <th class="hide-on-mobile">5MA</th>
+                <th class="hide-on-mobile">20MA</th>
+                <th class="hide-on-mobile">60MA</th>
+                <th class="hide-on-mobile">200MA</th>
+                <th id="dynamic-col">200MA連揚</th>
+            </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+    </table>
 
-  const ttConfig = getTooltipConfig();
-  ttConfig.filter = (item)=>item.datasetIndex===0;
-  ttConfig.callbacks = {
-    title:(items)=>labels[items[0].dataIndex],
-    label:(ctx)=>{
-      const d = ctx.raw.raw;
-      return [
-        `多方 ${Number(d[lk]||0).toLocaleString()} 口`,
-        `空方 ${Number(d[sk]||0).toLocaleString()} 口`
-      ];
-    }
-  };
+    <script>
+        let allStocksData = [];
+        let currentStrategy = 1;
+        let currentDataDate = null;
 
-  const chart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: '外層',
-          data: sliced.map(d => ({
-            x:d.date,
-            y:Math.max(d[lk]||0, d[sk]||0),
-            raw:d
-          })),
-          backgroundColor: sliced.map(d => ((d[lk]||0) >= (d[sk]||0) ? '#ff4d6d' : '#22c55e')),
-          grouped: false,
-          order: 2,
-          barPercentage: 0.72,
-          categoryPercentage: 0.8,
-          borderRadius: 2
-        },
-        {
-          label: '內層',
-          data: sliced.map(d => ({
-            x:d.date,
-            y:Math.min(d[lk]||0, d[sk]||0),
-            raw:d
-          })),
-          backgroundColor: sliced.map(d => ((d[lk]||0) < (d[sk]||0) ? '#ff4d6d' : '#22c55e')),
-          grouped: false,
-          order: 1,
-          barPercentage: 0.42,
-          categoryPercentage: 0.8,
-          borderRadius: 2
+        function toggleExplanation() {
+            const box = document.getElementById("strategy-explanation");
+            box.style.display = (box.style.display === "none" || box.style.display === "") ? "block" : "none";
         }
-      ]
-    },
-    options: commonChartOptions(ttConfig)
-  });
 
-  bindCrosshair(chart);
-  chartInstances.push(chart);
-}
+        function showDataDateWarning(dataDate, todayUpdatedCount) {
+            const warningEl = document.getElementById('data-date-info');
+            const taipeiNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+            const taipeiToday = `${taipeiNow.getFullYear()}-${String(taipeiNow.getMonth() + 1).padStart(2, '0')}-${String(taipeiNow.getDate()).padStart(2, '0')}`;
 
-function resolveDataSource(){
-  if (typeof myData !== 'undefined' && Array.isArray(myData)) return myData;
-  if (typeof TAIFEX_DATA !== 'undefined' && Array.isArray(TAIFEX_DATA)) return TAIFEX_DATA;
-  if (window.TAIFEX_DATA && Array.isArray(window.TAIFEX_DATA)) return window.TAIFEX_DATA;
-  return null;
-}
+            if (!dataDate) {
+                warningEl.innerHTML = '⚠️ 無法判斷資料交易日期';
+                warningEl.className = 'data-date-warning';
+                return;
+            }
 
-function updateScreen() {
-  if (!allData.length) return;
+            if (dataDate === taipeiToday) {
+                warningEl.innerHTML = `✅ 資料為今天交易日 (更新 ${todayUpdatedCount || 0} 檔)`;
+                warningEl.className = 'data-date-warning today';
+            } else {
+                warningEl.innerHTML = `⚠️ 資料為 ${dataDate} 交易日（非今日）`;
+                warningEl.className = 'data-date-warning yesterday';
+            }
+        }
 
-  let parsed = [];
-  if (currentView === 'inst') {
-    const k = instSymbol === 'TX' ? 'inst_tx' : 'inst_mtx';
-    parsed = allData.filter(d => d[k]).map(d => ({
-      date: d.date,
-      l: d[k].long || 0,
-      s: d[k].short || 0,
-      n: d[k].net || 0
-    }));
-  } else if (currentView === 'near') {
-    parsed = allData.filter(d => d.near).map(d => ({
-      date: d.date,
-      top5_l: d.near.top5_l || 0,
-      top5_s: d.near.top5_s || 0,
-      top5_n: d.near.top5_net || 0,
-      top10_l: d.near.top10_l || 0,
-      top10_s: d.near.top10_s || 0,
-      top10_n: d.near.top10_net || 0
-    }));
-  } else {
-    parsed = allData.filter(d => d.allm).map(d => ({
-      date: d.date,
-      top5_l: d.allm.top5_l || 0,
-      top5_s: d.allm.top5_s || 0,
-      top5_n: d.allm.top5_net || 0,
-      top10_l: d.allm.top10_l || 0,
-      top10_s: d.allm.top10_s || 0,
-      top10_n: d.allm.top10_net || 0
-    }));
-  }
+        function switchStrategy(strategyId, btnElement) {
+            currentStrategy = strategyId;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
 
-  if (!parsed.length) {
-    showStatus('資料來源存在，但解析後為 0 筆，請檢查 taifex_data.js 內容結構');
-    return;
-  }
+            const strategyNames = {
+                1: "1. 量縮測底完成",
+                2: "2. 空轉多拉回",
+                3: "3. 待更新",
+                4: "4. 待更新",
+                5: "5. 待更新"
+            };
+            document.getElementById('current-strategy-name').innerText = strategyNames[strategyId];
 
-  let sliced = parsed;
-  if (activeR !== 'all') {
-    const cut = new Date();
-    cut.setMonth(cut.getMonth() - activeR);
-    sliced = parsed.filter(d => {
-      const dt = parseDateSafe(d.date);
-      return dt && dt >= cut;
-    });
-  }
+            const expTitle = document.getElementById('exp-title');
+            const expContent = document.getElementById('exp-content');
+            const dynamicCol = document.getElementById('dynamic-col');
 
-  if (!sliced.length) sliced = parsed.slice(0, 250);
+            if (strategyId === 1) {
+                expTitle.innerText = "💡 策略 1：量縮測底完成 說明";
+                expContent.innerHTML = `
+                    <li>收盤價 > 5日、20日、60日均線</li>
+                    <li>20日最低收盤價 < 20日最低20MA (代表曾回測破線)</li>
+                    <li>成交張數 > 500 張</li>
+                    <li>收盤價 < 200日均線 × 1.4 (限制乖離)</li>
+                    <li>200日均線 (年線) 連續 10 日上升</li>`;
+                dynamicCol.innerText = "200MA連揚";
+            } else if (strategyId === 2) {
+                expTitle.innerText = "💡 策略 2：空轉多拉回 說明";
+                expContent.innerHTML = `
+                    <li>1. 今日收盤價 > 60日均線 & 20日均線</li>
+                    <li>2. 20日均線 > 昨日20日均線 (月線翻揚)</li>
+                    <li>3. 近10日內至少1日出量 (大於20日均量2倍) 且至少1日漲幅 > 5%</li>
+                    <li>4. 今日收盤價 < 近5日最高價 (代表有拉回)</li>
+                    <li>5. 今日收盤價距20日均線乖離率 < 3%</li>
+                    <li>6. 今日成交量 < 5日均量 & < 近10日最大量的 50% (量縮)</li>
+                    <li>7. KD 的 K 值 < 60</li>`;
+                dynamicCol.innerText = "KD指標(K)";
+            } else {
+                expTitle.innerText = `💡 策略 ${strategyId}：待更新`;
+                expContent.innerHTML = `<li>此策略尚未開放，敬請期待。</li>`;
+                dynamicCol.innerText = "備註";
+            }
 
-  const latest = sliced[0];
-  const rangeText = getRangeText(sliced);
+            renderTable();
+        }
 
-  if (currentView === 'inst') {
-    setCard(1, '最新淨額', latest.n, latest.date, latest.n >= 0 ? 'bull' : 'bear');
-    setCard(2, '多方天數', sliced.filter(x => x.n > 0).length, '所選區間', 'bull');
-    setCard(3, '多方口數', latest.l, '口數', 'gray');
-    setCard(4, '空方口數', latest.s, '口數', 'gray');
-  } else {
-    setCard(1, '前五大淨額', latest.top5_n, latest.date, latest.top5_n >= 0 ? 'bull' : 'bear');
-    setCard(2, '前十大淨額', latest.top10_n, latest.date, latest.top10_n >= 0 ? 'bull' : 'bear');
-    setCard(3, '前五大買方', latest.top5_l, '口數', 'gray');
-    setCard(4, '前五大賣方', latest.top5_s, '口數', 'gray');
-  }
+        async function fetchData() {
+            try {
+                const response = await fetch('all_stocks_data.json?t=' + new Date().getTime());
+                const data = await response.json();
 
-  const container = document.getElementById('charts-container');
-  destroyAllCharts();
-  const labels = sliced.map(d => d.date);
+                allStocksData = data.stocks || [];
+                currentDataDate = data.data_date || null;
 
-  if(currentView === 'inst'){
-    container.innerHTML = `
-      <div class="chart-grid-2">
-        ${chartBoxHTML('inst-net', `外資 ${instSymbol} 多空淨額`, rangeText, '淨多', '淨空')}
-        ${chartBoxHTML('inst-ov', `外資 ${instSymbol} 多空未平倉重疊圖`, rangeText, '多方', '空方')}
-      </div>
-    `;
-    buildNetChart('canvas-inst-net', labels, sliced.map(d=>d.n));
-    buildOverlapChart('canvas-inst-ov', sliced, 'l', 's');
-  } else {
-    const lbl = currentView === 'near' ? '近月' : '全月';
-    container.innerHTML = `
-      <div class="chart-grid-2">
-        ${chartBoxHTML('top5-net', `${lbl}前五大淨額`, rangeText, '淨多', '淨空')}
-        ${chartBoxHTML('top5-ov', `${lbl}前五大買賣方重疊圖`, rangeText, '買方', '賣方')}
-        ${chartBoxHTML('top10-net', `${lbl}前十大淨額`, rangeText, '淨多', '淨空')}
-        ${chartBoxHTML('top10-ov', `${lbl}前十大買賣方重疊圖`, rangeText, '買方', '賣方')}
-      </div>
-    `;
-    buildNetChart('canvas-top5-net', labels, sliced.map(d=>d.top5_n));
-    buildOverlapChart('canvas-top5-ov', sliced, 'top5_l', 'top5_s');
-    buildNetChart('canvas-top10-net', labels, sliced.map(d=>d.top10_n));
-    buildOverlapChart('canvas-top10-ov', sliced, 'top10_l', 'top10_s');
-  }
+                document.getElementById('update-time').innerText = '最後更新：' + (data.updated_at || '未知');
+                showDataDateWarning(data.data_date, data.today_updated_count);
+                document.getElementById('total-scanned').innerText = data.total_valid_stocks || allStocksData.length;
 
-  hideStatus();
-}
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('stock-table').style.display = 'table';
 
-function switchMainView(view) {
-  currentView = view;
-  document.querySelectorAll('#main-view-switcher .s-tab').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  document.getElementById('inst-sub-tabs').style.display = view === 'inst' ? 'block' : 'none';
-  updateScreen();
-}
+                renderTable();
+            } catch (error) {
+                console.error('讀取資料失敗:', error);
+                document.getElementById('loading').innerText = '資料載入失敗，請確認是否已至 GitHub Actions 重新執行抓取。';
+                document.getElementById('loading').style.color = 'red';
+            }
+        }
 
-function switchInstSymbol(sym) {
-  instSymbol = sym;
-  document.getElementById('btn-sym-tx').classList.toggle('on', sym === 'TX');
-  document.getElementById('btn-sym-mtx').classList.toggle('on', sym === 'MTX');
-  updateScreen();
-}
+        function renderTable() {
+            const tableBody = document.getElementById('table-body');
+            tableBody.innerHTML = '';
+            let count = 0;
 
-function setR(m, el) {
-  activeR = m;
-  document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
-  el.classList.add('on');
-  updateScreen();
-}
+            allStocksData.forEach(stock => {
+                if (!stock.date || !currentDataDate || stock.date !== currentDataDate) {
+                    return;
+                }
 
-window.onload = function() {
-  const source = resolveDataSource();
-  if (!source) {
-    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
-    return;
-  }
+                let isMatch = false;
+                let lastColValue = "符合";
 
-  allData = source.slice();
-  updateScreen();
-};
-</script>
+                if (currentStrategy === 1) {
+                    isMatch = (
+                        stock.close > stock.ma5 &&
+                        stock.close > stock.ma20 &&
+                        stock.close > stock.ma60 &&
+                        stock.lowestClose20 < stock.ma20 &&
+                        stock.volume > 500 &&
+                        stock.close < (stock.ma200 * 1.4) &&
+                        stock.ma200_up_10days === true
+                    );
+                } else if (currentStrategy === 2) {
+                    if (stock.k_value !== undefined) {
+                        isMatch = (
+                            stock.close > stock.ma60 &&
+                            stock.ma20 > stock.ma20_yesterday &&
+                            stock.has_vol_burst_10d === true &&
+                            stock.has_price_burst_10d === true &&
+                            stock.close < stock.highestClose5 &&
+                            stock.close > stock.ma20 &&
+                            stock.bias20 < 3.0 &&
+                            stock.volume < stock.vol_ma5 &&
+                            stock.volume < (stock.max_vol_10d * 0.5) &&
+                            stock.k_value < 60
+                        );
+                        lastColValue = `K: ${stock.k_value}`;
+                    }
+                }
+
+                if (isMatch) {
+                    count++;
+                    const marketClass = stock.market === '上市' ? 'badge-twse' : 'badge-tpex';
+                    const tr = document.createElement('tr');
+
+                    tr.innerHTML = `
+                        <td>
+                            <a href="https://www.wantgoo.com/stock/${stock.code}/technical-chart" target="_blank" style="color:#0d6efd; text-decoration:none; font-weight:bold;">
+                                ${stock.code}
+                            </a>
+                        </td>
+                        <td style="font-weight:bold;">${stock.name}</td>
+                        <td class="hide-on-mobile"><span class="market-badge ${marketClass}">${stock.market}</span></td>
+                        <td style="color:#d32f2f; font-weight:bold;">${stock.close}</td>
+                        <td>${stock.volume}</td>
+                        <td class="hide-on-mobile">${stock.date}</td>
+                        <td class="hide-on-mobile">${stock.ma5}</td>
+                        <td class="hide-on-mobile">${stock.ma20}</td>
+                        <td class="hide-on-mobile">${stock.ma60}</td>
+                        <td class="hide-on-mobile">${stock.ma200}</td>
+                        <td class="pass">${lastColValue}</td>
+                    `;
+                    tableBody.appendChild(tr);
+                }
+            });
+
+            document.getElementById('stock-count').innerText = count;
+
+            if (count === 0 && currentStrategy > 2) {
+                tableBody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding: 20px; color:#666;">策略待更新...</td></tr>';
+            } else if (count === 0 && (currentStrategy === 1 || currentStrategy === 2)) {
+                tableBody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding: 20px; color:#666;">目前資料日期無符合此策略條件之個股</td></tr>';
+            }
+        }
+
+        window.onload = fetchData;
+    </script>
 </body>
 </html>
