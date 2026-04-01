@@ -4,138 +4,99 @@ import os
 import time
 from datetime import datetime, timedelta
 
-JS_FILE = "taifex_data.js"
+JSON_FILE = 'taifexdata.json'
+JS_FILE = 'taifex_data.js'
 MAX_DAYS = 2500
-
 
 def fetch_large_trader(start_date, end_date):
     all_rows = []
-    cursor = datetime.strptime(start_date, "%Y/%m/%d")
-    end_dt = datetime.strptime(end_date, "%Y/%m/%d")
+    cursor = datetime.strptime(start_date, '%Y/%m/%d')
+    end_dt = datetime.strptime(end_date, '%Y/%m/%d')
 
     while cursor <= end_dt:
         chunk_end = min(cursor + timedelta(days=88), end_dt)
-        s_str = cursor.strftime("%Y/%m/%d")
-        e_str = chunk_end.strftime("%Y/%m/%d")
-        print(f"[TAIFEX] 抓取區間: {s_str} ~ {e_str}")
+        s_str = cursor.strftime('%Y/%m/%d')
+        e_str = chunk_end.strftime('%Y/%m/%d')
+        print(f" [期交所] 抓取區間: {s_str} ~ {e_str}")
 
         try:
             res = requests.post(
-                "https://www.taifex.com.tw/cht/3/largeTraderFutDown",
-                data={"queryStartDate": s_str, "queryEndDate": e_str},
+                'https://www.taifex.com.tw/cht/3/largeTraderFutDown',
+                data={'queryStartDate': s_str, 'queryEndDate': e_str},
                 timeout=30
             )
-            text = res.content.decode("ms950", errors="ignore")
-            lines = text.strip().splitlines()
+            text = res.content.decode('ms950')
+            lines = text.strip().split('\n')
 
-            if len(lines) > 1 and "," in text:
-                header = [h.strip() for h in lines[0].split(",")]
+            if len(lines) > 1 and '查詢區間' not in text:
+                header = [h.strip() for h in lines[0].split(',')]
                 for line in lines[1:]:
-                    vals = [v.strip() for v in line.split(",")]
+                    vals = [v.strip() for v in line.split(',')]
                     if len(vals) == len(header):
                         all_rows.append(dict(zip(header, vals)))
         except Exception as e:
-            print(f"[TAIFEX] 錯誤: {e}")
+            print(f" [期交所] 錯誤: {e}")
 
         cursor = chunk_end + timedelta(days=1)
         time.sleep(1)
 
     return all_rows
 
-
 def fetch_inst(symbol, start_date, end_date):
-    s_str = start_date.replace("/", "-")
-    e_str = end_date.replace("/", "-")
-    print(f"[FinMind] 抓取 {symbol}: {s_str} ~ {e_str}")
+    s_str = start_date.replace('/', '-')
+    e_str = end_date.replace('/', '-')
+    print(f" [FinMind] 抓取 {symbol}: {s_str} ~ {e_str}")
 
-    url = (
-        "https://api.finmindtrade.com/api/v4/data"
-        f"?dataset=TaiwanFuturesInstitutionalInvestors"
-        f"&data_id={symbol}"
-        f"&start_date={s_str}"
-        f"&end_date={e_str}"
-    )
-
+    url = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanFuturesInstitutionalInvestors&data_id={symbol}&start_date={s_str}&end_date={e_str}"
     try:
         res = requests.get(url, timeout=30)
-        data = res.json().get("data", [])
-        return [d for d in data if "外資" in d.get("institutional_investors", "")]
+        data = res.json().get('data', [])
+        return [d for d in data if '外資' in d.get('institutional_investors', '')]
     except Exception as e:
-        print(f"[FinMind] 錯誤: {e}")
+        print(f" [FinMind] 錯誤: {e}")
         return []
-
-
-def to_int(value):
-    try:
-        return int(str(value).replace(",", "").strip())
-    except Exception:
-        return 0
-
 
 def process_data(start_date, end_date):
     large_raw = fetch_large_trader(start_date, end_date)
-    inst_tx_raw = fetch_inst("TX", start_date, end_date)
-    inst_mtx_raw = fetch_inst("MTX", start_date, end_date)
+    inst_tx_raw = fetch_inst('TX', start_date, end_date)
+    inst_mtx_raw = fetch_inst('MTX', start_date, end_date)
 
     daily_data = {}
 
     for d in inst_tx_raw:
-        date = d["date"].replace("-", "/")
-        l = d.get("long_open_interest_balance_volume", 0)
-        s = d.get("short_open_interest_balance_volume", 0)
+        date = d['date'].replace('-', '/')
+        l = d.get('long_open_interest_balance_volume', 0)
+        s = d.get('short_open_interest_balance_volume', 0)
         if date not in daily_data:
             daily_data[date] = {"date": date}
-        daily_data[date]["inst_tx"] = {
-            "long": l,
-            "short": s,
-            "net": l - s
-        }
+        daily_data[date]["inst_tx"] = {"long": l, "short": s, "net": l - s}
 
     for d in inst_mtx_raw:
-        date = d["date"].replace("-", "/")
-        l = d.get("long_open_interest_balance_volume", 0)
-        s = d.get("short_open_interest_balance_volume", 0)
+        date = d['date'].replace('-', '/')
+        l = d.get('long_open_interest_balance_volume', 0)
+        s = d.get('short_open_interest_balance_volume', 0)
         if date not in daily_data:
             daily_data[date] = {"date": date}
-        daily_data[date]["inst_mtx"] = {
-            "long": l,
-            "short": s,
-            "net": l - s
-        }
+        daily_data[date]["inst_mtx"] = {"long": l, "short": s, "net": l - s}
 
-    tx_large = [
-        r for r in large_raw
-        if r.get("商品名稱", r.get("商品(契約)", "")).strip() == "TX"
-        and r.get("身份別", r.get("交易人類別", "")).strip() == "0"
-    ]
+    tx_large = [r for r in large_raw if r.get('商品(契約)','').strip()=='TX' and r.get('交易人類別','').strip()=='0']
 
     for r in tx_large:
-        date = r.get("日期", "").strip()
-        month = r.get("到期月份(週別)", "").strip()
-
-        if not date:
-            continue
-
+        date = r['日期']
+        month = r.get('到期月份(週別)','').strip()
         if date not in daily_data:
             daily_data[date] = {"date": date}
 
-        t5l = to_int(r.get("前五大交易人買方", 0))
-        t5s = to_int(r.get("前五大交易人賣方", 0))
-        t10l = to_int(r.get("前十大交易人買方", 0))
-        t10s = to_int(r.get("前十大交易人賣方", 0))
+        t5l = int(r.get('前五大交易人買方', 0))
+        t5s = int(r.get('前五大交易人賣方', 0))
+        t10l = int(r.get('前十大交易人買方', 0))
+        t10s = int(r.get('前十大交易人賣方', 0))
 
-        payload = {
-            "top5_l": t5l,
-            "top5_s": t5s,
-            "top5_net": t5l - t5s,
-            "top10_l": t10l,
-            "top10_s": t10s,
-            "top10_net": t10l - t10s
-        }
+        payload = {"top5_l": t5l, "top5_s": t5s, "top5_net": t5l-t5s, "top10_l": t10l, "top10_s": t10s, "top10_net": t10l-t10s}
 
-        if month == "999999":
+        if month == '999999':
             daily_data[date]["allm"] = payload
-        elif len(month) == 6 and month not in ("666666", "999912"):
+        elif len(month) == 6 and month not in ('666666', '999912'):
             if "near" not in daily_data[date] or month < daily_data[date].get("_near_month", "999999"):
                 daily_data[date]["near"] = payload
                 daily_data[date]["_near_month"] = month
@@ -145,75 +106,51 @@ def process_data(start_date, end_date):
 
     return list(daily_data.values())
 
-
-def load_old_data():
-    if not os.path.exists(JS_FILE):
-        return []
-
-    try:
-        with open(JS_FILE, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-
-        prefixes = [
-            "window.TAIFEX_DATA = ",
-            "var myData = "
-        ]
-
-        for prefix in prefixes:
-            if content.startswith(prefix):
-                content = content[len(prefix):]
-                break
-
-        if content.endswith(";"):
-            content = content[:-1]
-
-        return json.loads(content)
-    except Exception as e:
-        print(f"[LOAD] 舊資料讀取失敗: {e}")
-        return []
-
-
-def save_js(data):
-    js_content = "window.TAIFEX_DATA = " + json.dumps(
-        data,
-        ensure_ascii=False,
-        separators=(",", ":")
-    ) + ";\n"
-
-    with open(JS_FILE, "w", encoding="utf-8") as f:
-        f.write(js_content)
-
-
 def main():
     print("=== 啟動台指期資料更新 ===")
 
-    old_data = load_old_data()
-    print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
+    old_data = []
+    if os.path.exists(JSON_FILE):
+        with open(JSON_FILE, 'r', encoding='utf-8') as f:
+            old_data = json.load(f)
+            print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
 
-    end_date = datetime.now().strftime("%Y/%m/%d")
+    end_date = datetime.now().strftime('%Y/%m/%d')
 
     if len(old_data) == 0:
-        start_date = (datetime.now() - timedelta(days=3650)).strftime("%Y/%m/%d")
+        start_date = (datetime.now() - timedelta(days=3650)).strftime('%Y/%m/%d')
         print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {end_date}")
     else:
-        start_date = (datetime.now() - timedelta(days=5)).strftime("%Y/%m/%d")
+        start_date = (datetime.now() - timedelta(days=5)).strftime('%Y/%m/%d')
         print(f"執行增量更新: {start_date} ~ {end_date}")
 
     new_data = process_data(start_date, end_date)
     print(f"本次成功抓取 {len(new_data)} 個交易日")
 
-    data_dict = {d["date"]: d for d in old_data}
+    data_dict = {d['date']: d for d in old_data}
     for d in new_data:
-        data_dict[d["date"]] = d
+        data_dict[d['date']] = d
 
-    final_data = sorted(list(data_dict.values()), key=lambda x: x["date"], reverse=True)
+    final_data = sorted(list(data_dict.values()), key=lambda x: x['date'], reverse=True)
 
     if len(final_data) > MAX_DAYS:
         final_data = final_data[:MAX_DAYS]
 
-    save_js(final_data)
-    print(f"=== 更新完成！總筆數: {len(final_data)} 筆，輸出檔案: {JS_FILE} ===")
+    # 保留 json 檔案作為緩存
+    with open(JSON_FILE, 'w', encoding='utf-8') as f:
+        json.dump(final_data, f, ensure_ascii=False, separators=(',', ':'))
 
+    # 輸出包含時間戳的 JS 變數檔案
+    output_payload = {
+        "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "data": final_data
+    }
+    with open(JS_FILE, 'w', encoding='utf-8') as f:
+        f.write("var myData = ")
+        json.dump(output_payload, f, ensure_ascii=False, separators=(',', ':'))
+        f.write(";")
 
-if __name__ == "__main__":
+    print(f"=== 更新完成！總筆數: {len(final_data)} 筆 ===")
+
+if __name__ == '__main__':
     main()
