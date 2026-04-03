@@ -1,2 +1,2 @@
-var TAIFEX_META = {"updated_at": "2026/04/03 14:38 TW"};
+var TAIFEX_META = {"updated_at": "2026/04/03 14:42 TW"};
 var TAIFEX_DATA = [{"date":"2026/04/03","inst_tx":{"long":0,"short":13,"net":13}},{"date":"2026/04/02","inst_tx":{"long":0,"short":13,"net":13}},{"date":"2026/04/01","inst_tx":{"long":0,"short":13,"net":13}},{"date":"2026/03/31","inst_tx":{"long":0,"short":13,"net":13}},{"date":"2026/03/30","inst_tx":{"long":0,"short":13,"net":13}},{"date":"2026/03/29","inst_tx":{"long":0,"short":13,"net":13}},{"date":"2026/03/28","inst_tx":{"long":0,"short":13,"net":13}}];
