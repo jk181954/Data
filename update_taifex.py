@@ -1,217 +1,219 @@
 import requests
-import re
 import json
 import os
-from datetime import datetime, timedelta, timezone
+import time
+from datetime import datetime, timedelta
 
-JS_FILE = 'taifex_data.js'
+JS_FILE = "taifex_data.js"
 MAX_DAYS = 2500
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Referer': 'https://www.taifex.com.tw/cht/3/futContractsDate'
-}
 
-TW_TZ = timezone(timedelta(hours=8))
+def fetch_large_trader(start_date, end_date):
+    all_rows = []
+    cursor = datetime.strptime(start_date, "%Y/%m/%d")
+    end_dt = datetime.strptime(end_date, "%Y/%m/%d")
+
+    while cursor <= end_dt:
+        chunk_end = min(cursor + timedelta(days=88), end_dt)
+        s_str = cursor.strftime("%Y/%m/%d")
+        e_str = chunk_end.strftime("%Y/%m/%d")
+        print(f"[TAIFEX] 抓取區間: {s_str} ~ {e_str}")
+
+        try:
+            res = requests.post(
+                "https://www.taifex.com.tw/cht/3/largeTraderFutDown",
+                data={"queryStartDate": s_str, "queryEndDate": e_str},
+                timeout=30
+            )
+            text = res.content.decode("ms950", errors="ignore")
+            lines = text.strip().splitlines()
+
+            if len(lines) > 1 and "," in text:
+                header = [h.strip() for h in lines[0].split(",")]
+                for line in lines[1:]:
+                    vals = [v.strip() for v in line.split(",")]
+                    if len(vals) == len(header):
+                        all_rows.append(dict(zip(header, vals)))
+        except Exception as e:
+            print(f"[TAIFEX] 錯誤: {e}")
+
+        cursor = chunk_end + timedelta(days=1)
+        time.sleep(1)
+
+    return all_rows
 
 
-def now_tw():
-    return datetime.now(TW_TZ)
+def fetch_inst(symbol, start_date, end_date):
+    s_str = start_date.replace("/", "-")
+    e_str = end_date.replace("/", "-")
+    print(f"[FinMind] 抓取 {symbol}: {s_str} ~ {e_str}")
 
+    url = (
+        "https://api.finmindtrade.com/api/v4/data"
+        f"?dataset=TaiwanFuturesInstitutionalInvestors"
+        f"&data_id={symbol}"
+        f"&start_date={s_str}"
+        f"&end_date={e_str}"
+    )
 
-def format_tw(dt):
-    return dt.strftime('%Y/%m/%d %H:%M TW')
-
-
-def extract_json_var(content, var_name):
-    pattern = rf'var\s+{var_name}\s*=\s*(.*?);'
-    match = re.search(pattern, content, re.DOTALL)
-    if not match:
-        return None
-    raw = match.group(1).strip()
     try:
-        return json.loads(raw)
-    except Exception:
-        return None
-
-
-def load_existing():
-    if not os.path.exists(JS_FILE):
-        print("📂 找不到舊 taifex_data.js，將建立新檔")
-        return [], {}
-
-    try:
-        with open(JS_FILE, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        data = extract_json_var(content, 'TAIFEX_DATA')
-        meta = extract_json_var(content, 'TAIFEX_META')
-
-        if not isinstance(data, list):
-            print("📂 舊資料格式異常，改視為空資料")
-            return [], meta if isinstance(meta, dict) else {}
-
-        print(f"📂 舊資料: {len(data)} 筆")
-        return data, meta if isinstance(meta, dict) else {}
+        res = requests.get(url, timeout=30)
+        data = res.json().get("data", [])
+        return [d for d in data if "外資" in d.get("institutional_investors", "")]
     except Exception as e:
-        print(f"📂 讀取舊資料失敗: {e}")
-        return [], {}
+        print(f"[FinMind] 錯誤: {e}")
+        return []
 
 
-def parse_int(v):
-    if v is None:
-        return 0
-    s = str(v).replace(',', '').replace('+', '').strip()
-    if s in ('', '-', '--'):
-        return 0
+def to_int(value):
     try:
-        return int(s)
+        return int(str(value).replace(",", "").strip())
     except Exception:
         return 0
 
 
-def normalize_record(record):
-    if not isinstance(record, dict):
-        return None
-    if 'date' not in record:
-        return None
+def process_data(start_date, end_date):
+    large_raw = fetch_large_trader(start_date, end_date)
+    inst_tx_raw = fetch_inst("TX", start_date, end_date)
+    inst_mtx_raw = fetch_inst("MTX", start_date, end_date)
 
-    out = {'date': record['date']}
+    daily_data = {}
 
-    if isinstance(record.get('inst_tx'), dict):
-        out['inst_tx'] = {
-            'long': parse_int(record['inst_tx'].get('long', 0)),
-            'short': parse_int(record['inst_tx'].get('short', 0)),
-            'net': parse_int(record['inst_tx'].get('net', 0)),
+    for d in inst_tx_raw:
+        date = d["date"].replace("-", "/")
+        l = d.get("long_open_interest_balance_volume", 0)
+        s = d.get("short_open_interest_balance_volume", 0)
+        if date not in daily_data:
+            daily_data[date] = {"date": date}
+        daily_data[date]["inst_tx"] = {
+            "long": l,
+            "short": s,
+            "net": l - s
         }
 
-    if isinstance(record.get('inst_mtx'), dict):
-        out['inst_mtx'] = {
-            'long': parse_int(record['inst_mtx'].get('long', 0)),
-            'short': parse_int(record['inst_mtx'].get('short', 0)),
-            'net': parse_int(record['inst_mtx'].get('net', 0)),
+    for d in inst_mtx_raw:
+        date = d["date"].replace("-", "/")
+        l = d.get("long_open_interest_balance_volume", 0)
+        s = d.get("short_open_interest_balance_volume", 0)
+        if date not in daily_data:
+            daily_data[date] = {"date": date}
+        daily_data[date]["inst_mtx"] = {
+            "long": l,
+            "short": s,
+            "net": l - s
         }
 
-    if isinstance(record.get('near'), dict):
-        out['near'] = {
-            'top5_l': parse_int(record['near'].get('top5_l', 0)),
-            'top5_s': parse_int(record['near'].get('top5_s', 0)),
-            'top5_net': parse_int(record['near'].get('top5_net', 0)),
-            'top10_l': parse_int(record['near'].get('top10_l', 0)),
-            'top10_s': parse_int(record['near'].get('top10_s', 0)),
-            'top10_net': parse_int(record['near'].get('top10_net', 0)),
+    tx_large = [
+        r for r in large_raw
+        if r.get("商品名稱", r.get("商品(契約)", "")).strip() == "TX"
+        and r.get("身份別", r.get("交易人類別", "")).strip() == "0"
+    ]
+
+    for r in tx_large:
+        date = r.get("日期", "").strip()
+        month = r.get("到期月份(週別)", "").strip()
+
+        if not date:
+            continue
+
+        if date not in daily_data:
+            daily_data[date] = {"date": date}
+
+        t5l = to_int(r.get("前五大交易人買方", 0))
+        t5s = to_int(r.get("前五大交易人賣方", 0))
+        t10l = to_int(r.get("前十大交易人買方", 0))
+        t10s = to_int(r.get("前十大交易人賣方", 0))
+
+        payload = {
+            "top5_l": t5l,
+            "top5_s": t5s,
+            "top5_net": t5l - t5s,
+            "top10_l": t10l,
+            "top10_s": t10s,
+            "top10_net": t10l - t10s
         }
 
-    if isinstance(record.get('allm'), dict):
-        out['allm'] = {
-            'top5_l': parse_int(record['allm'].get('top5_l', 0)),
-            'top5_s': parse_int(record['allm'].get('top5_s', 0)),
-            'top5_net': parse_int(record['allm'].get('top5_net', 0)),
-            'top10_l': parse_int(record['allm'].get('top10_l', 0)),
-            'top10_s': parse_int(record['allm'].get('top10_s', 0)),
-            'top10_net': parse_int(record['allm'].get('top10_net', 0)),
-        }
+        if month == "999999":
+            daily_data[date]["allm"] = payload
+        elif len(month) == 6 and month not in ("666666", "999912"):
+            if "near" not in daily_data[date] or month < daily_data[date].get("_near_month", "999999"):
+                daily_data[date]["near"] = payload
+                daily_data[date]["_near_month"] = month
 
-    return out
+    for date in daily_data:
+        daily_data[date].pop("_near_month", None)
 
-
-def is_meaningful_record(record):
-    if not record or 'date' not in record:
-        return False
-
-    keys = ['inst_tx', 'inst_mtx', 'near', 'allm']
-    has_any_block = any(isinstance(record.get(k), dict) and len(record.get(k)) > 0 for k in keys)
-    return has_any_block
+    return list(daily_data.values())
 
 
-def fetch_latest_data(days=7):
-    """
-    這裡先保留安全框架：
-    若未成功抓到完整新資料，就回傳 []，避免覆蓋舊資料。
-    你後續可把真實抓 TX/MTX/近月/全月解析邏輯補進來。
-    """
-    results = []
-    end_date = now_tw()
+def load_old_data():
+    if not os.path.exists(JS_FILE):
+        return []
 
-    for i in range(days):
-        query_date = (end_date - timedelta(days=i)).strftime('%Y/%m/%d')
-        print(f"📅 檢查 {query_date} ...")
+    try:
+        with open(JS_FILE, "r", encoding="utf-8") as f:
+            content = f.read().strip()
 
-        # 這裡先不硬覆蓋舊資料
-        # 若你之後已經有穩定解析邏輯，可在這裡 append 真實 record
-        # results.append({...})
+        prefixes = [
+            "window.TAIFEX_DATA = ",
+            "var myData = "
+        ]
 
-    return results
+        for prefix in prefixes:
+            if content.startswith(prefix):
+                content = content[len(prefix):]
+                break
 
+        if content.endswith(";"):
+            content = content[:-1]
 
-def merge_data(old_data, new_data):
-    merged = {}
-
-    for row in old_data:
-        n = normalize_record(row)
-        if n and 'date' in n:
-            merged[n['date']] = n
-
-    for row in new_data:
-        n = normalize_record(row)
-        if n and 'date' in n and is_meaningful_record(n):
-            if n['date'] in merged:
-                base = merged[n['date']]
-                for key in ['inst_tx', 'inst_mtx', 'near', 'allm']:
-                    if key in n and isinstance(n[key], dict) and n[key]:
-                        base[key] = n[key]
-                merged[n['date']] = base
-            else:
-                merged[n['date']] = n
-
-    final = sorted(
-        merged.values(),
-        key=lambda x: datetime.strptime(x['date'], '%Y/%m/%d'),
-        reverse=True
-    )[:MAX_DAYS]
-
-    return final
+        return json.loads(content)
+    except Exception as e:
+        print(f"[LOAD] 舊資料讀取失敗: {e}")
+        return []
 
 
-def save_js(final_data, old_meta=None):
-    meta = old_meta.copy() if isinstance(old_meta, dict) else {}
-    meta['updated_at'] = format_tw(now_tw())
+def save_js(data):
+    js_content = "window.TAIFEX_DATA = " + json.dumps(
+        data,
+        ensure_ascii=False,
+        separators=(",", ":")
+    ) + ";\n"
 
-    with open(JS_FILE, 'w', encoding='utf-8') as f:
-        f.write(f"var TAIFEX_META = {json.dumps(meta, ensure_ascii=False, separators=(',', ':'))};\n")
-        f.write(f"var TAIFEX_DATA = {json.dumps(final_data, ensure_ascii=False, separators=(',', ':'))};\n")
+    with open(JS_FILE, "w", encoding="utf-8") as f:
+        f.write(js_content)
 
 
 def main():
-    print("=== TAIFEX 安全更新模式 ===")
+    print("=== 啟動台指期資料更新 ===")
 
-    old_data, old_meta = load_existing()
-    new_data = fetch_latest_data(days=7)
+    old_data = load_old_data()
+    print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
 
-    valid_new = [x for x in new_data if is_meaningful_record(x)]
-    print(f"📦 新資料有效筆數: {len(valid_new)}")
+    end_date = datetime.now().strftime("%Y/%m/%d")
 
-    if not old_data and not valid_new:
-        print("⚠️ 沒有舊資料，也沒有有效新資料，停止寫入，避免產生空殼檔")
-        return
-
-    if not valid_new:
-        print("⚠️ 本次沒有抓到有效新資料，保留舊資料，只更新 updated_at")
-        final_data = old_data
+    if len(old_data) == 0:
+        start_date = (datetime.now() - timedelta(days=3650)).strftime("%Y/%m/%d")
+        print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {end_date}")
     else:
-        final_data = merge_data(old_data, valid_new)
+        start_date = (datetime.now() - timedelta(days=5)).strftime("%Y/%m/%d")
+        print(f"執行增量更新: {start_date} ~ {end_date}")
 
-    if not final_data:
-        print("⚠️ 合併後資料為空，停止寫入")
-        return
+    new_data = process_data(start_date, end_date)
+    print(f"本次成功抓取 {len(new_data)} 個交易日")
 
-    save_js(final_data, old_meta=old_meta)
+    data_dict = {d["date"]: d for d in old_data}
+    for d in new_data:
+        data_dict[d["date"]] = d
 
-    print(f"🎉 完成，保留/輸出 {len(final_data)} 筆")
-    print("最新三筆：")
-    for row in final_data[:3]:
-        print(f" {row.get('date')} keys={','.join([k for k in row.keys() if k != 'date'])}")
+    final_data = sorted(list(data_dict.values()), key=lambda x: x["date"], reverse=True)
+
+    if len(final_data) > MAX_DAYS:
+        final_data = final_data[:MAX_DAYS]
+
+    save_js(final_data)
+    print(f"=== 更新完成！總筆數: {len(final_data)} 筆，輸出檔案: {JS_FILE} ===")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
