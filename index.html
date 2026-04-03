@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>台股籌碼分析</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="./taifex_data.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -74,6 +73,7 @@ h1 .accent{color:var(--blue)}
   background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:14px 14px;margin-bottom:14px
 }
 .tool-left{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.tool-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .tabs{display:flex;gap:6px;flex-wrap:wrap}
 .tab{
   padding:8px 12px;border-radius:8px;font-size:13px;font-family:var(--mono);font-weight:800;
@@ -81,6 +81,12 @@ h1 .accent{color:var(--blue)}
 }
 .tab:hover{border-color:var(--bdr2);color:var(--text)}
 .tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.refresh-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:8px 12px;border-radius:8px;font-size:13px;font-family:var(--mono);font-weight:800;
+  cursor:pointer;border:1px solid var(--bdr2);color:var(--text);background:var(--bg3);transition:all .18s
+}
+.refresh-btn:hover{border-color:var(--blue);color:#fff;background:#122036}
 
 .update-bar{
   display:flex;
@@ -152,6 +158,8 @@ canvas{display:block;width:100%!important;height:100%!important}
   .header-right{width:100%;margin-top:8px;}
   .symbol-group{width:100%;display:flex;}
   .s-tab{flex:1;text-align:center;padding:8px 4px;font-size:12px;}
+  .tool-right{width:100%}
+  .refresh-btn{width:100%}
 }
 @media(max-width:480px){
   .cval{font-size:24px}
@@ -192,6 +200,9 @@ canvas{display:block;width:100%!important;height:100%!important}
       <button class="tab" onclick="setR(60,this)">5Y</button>
       <button class="tab" onclick="setR('all',this)">全部</button>
     </div>
+  </div>
+  <div class="tool-right">
+    <button class="refresh-btn" onclick="forceRefresh()">重新整理最新資料</button>
   </div>
 </div>
 
@@ -239,7 +250,6 @@ const crosshairPlugin = {
       const bottomY = chart.scales.y.bottom;
       const leftX = chart.scales.x.left;
       const rightX = chart.scales.x.right;
-
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(x, topY);
@@ -248,7 +258,6 @@ const crosshairPlugin = {
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
       ctx.setLineDash([4, 4]);
       ctx.stroke();
-
       if (y >= topY && y <= bottomY) {
         ctx.beginPath();
         ctx.moveTo(leftX, y);
@@ -258,7 +267,6 @@ const crosshairPlugin = {
         ctx.setLineDash([]);
         ctx.stroke();
       }
-
       ctx.restore();
     }
   }
@@ -353,14 +361,8 @@ function buildNetChart(canvasId, labels, netData){
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      interaction: {
-        mode: 'index',
-        intersect: false
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: getTooltipConfig()
-      },
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: getTooltipConfig() },
       scales: {
         x: { ticks: { color: '#94a3b8', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { color: '#141e2a' } },
         y: { ticks: { color: '#94a3b8', callback: (v) => Number(v).toLocaleString() }, grid: { color: '#141e2a' } }
@@ -373,7 +375,6 @@ function buildNetChart(canvasId, labels, netData){
 function buildOverlapChart(canvasId, sliced, lk, sk){
   const ctx = document.getElementById(canvasId).getContext('2d');
   const labels = sliced.map(d => d.date);
-
   const ttConfig = getTooltipConfig();
   ttConfig.filter = (item)=>item.datasetIndex===0;
   ttConfig.callbacks = {
@@ -383,7 +384,6 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
       return [`多方 ${Number(d[lk]||0).toLocaleString()} 口`,`空方 ${Number(d[sk]||0).toLocaleString()} 口`];
     }
   };
-
   const chart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -428,18 +428,21 @@ function resolveDataSource(){
 function renderUpdateTime(source){
   const el = document.getElementById('updateText');
   if(!el) return;
-
   if (window.TAIFEX_META && window.TAIFEX_META.updated_at) {
     el.textContent = `資料更新時間：${window.TAIFEX_META.updated_at}`;
     return;
   }
-
   if (source && source.length && source[0].date) {
     el.textContent = `資料最新交易日：${source[0].date}`;
     return;
   }
-
   el.textContent = '資料更新時間：無法判定';
+}
+
+function forceRefresh(){
+  const url = new URL(window.location.href);
+  url.searchParams.set('reload', Date.now().toString());
+  window.location.replace(url.toString());
 }
 
 function updateScreen() {
@@ -552,18 +555,29 @@ function setR(m, el) {
   updateScreen();
 }
 
-window.onload = function() {
-  const source = resolveDataSource();
-
-  if (!source) {
+function loadTaifexScriptAndStart() {
+  const script = document.createElement('script');
+  script.src = `./taifex_data.js?v=${Date.now()}`;
+  script.onload = function() {
+    const source = resolveDataSource();
+    if (!source) {
+      renderUpdateTime(null);
+      showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
+      return;
+    }
+    renderUpdateTime(source);
+    allData = source.slice();
+    updateScreen();
+  };
+  script.onerror = function() {
     renderUpdateTime(null);
-    showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
-    return;
-  }
+    showStatus('taifex_data.js 載入失敗，請稍後再試或重新整理');
+  };
+  document.head.appendChild(script);
+}
 
-  renderUpdateTime(source);
-  allData = source.slice();
-  updateScreen();
+window.onload = function() {
+  loadTaifexScriptAndStart();
 };
 </script>
 </body>
