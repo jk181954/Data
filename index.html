@@ -82,6 +82,28 @@ h1 .accent{color:var(--blue)}
 .tab:hover{border-color:var(--bdr2);color:var(--text)}
 .tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
 
+.update-bar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:var(--bg2);
+  border:1px solid var(--bdr);
+  border-radius:12px;
+  padding:10px 14px;
+  margin-bottom:12px;
+  color:var(--muted);
+  font-size:13px;
+  font-family:var(--mono);
+}
+.update-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--blue);
+  box-shadow:0 0 0 4px rgba(79,140,255,.12);
+  flex:0 0 auto;
+}
+
 #status{
   display:none;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);
   border:1px solid var(--bdr2);border-radius:10px;margin-bottom:12px;font-size:13px;color:#ff4d6d;font-weight:700
@@ -173,6 +195,11 @@ canvas{display:block;width:100%!important;height:100%!important}
   </div>
 </div>
 
+<div class="update-bar" id="updateBar">
+  <span class="update-dot"></span>
+  <span id="updateText">資料更新時間：讀取中...</span>
+</div>
+
 <div id="status"><span id="smsg"></span></div>
 
 <div class="stats">
@@ -201,97 +228,42 @@ let activeR = 3;
 let chartInstances = [];
 
 const crosshairPlugin = {
-  id: 'crosshairPlugin',
-  afterDraw(chart) {
-    const { ctx, chartArea } = chart;
-    if (!chartArea) return;
+  id: 'crosshairLine',
+  afterDraw: chart => {
+    if (chart.tooltip?._active && chart.tooltip._active.length) {
+      const activePoint = chart.tooltip._active[0];
+      const ctx = chart.ctx;
+      const x = activePoint.element.x;
+      const y = chart.tooltip._eventPosition ? chart.tooltip._eventPosition.y : activePoint.element.y;
+      const topY = chart.scales.y.top;
+      const bottomY = chart.scales.y.bottom;
+      const leftX = chart.scales.x.left;
+      const rightX = chart.scales.x.right;
 
-    const snapX = chart.$crosshairSnapX;
-    const mouseY = chart.$crosshairMouseY;
-
-    if (snapX == null || mouseY == null) return;
-
-    ctx.save();
-
-    if (snapX >= chartArea.left && snapX <= chartArea.right) {
+      ctx.save();
       ctx.beginPath();
-      ctx.setLineDash([6, 6]);
+      ctx.moveTo(x, topY);
+      ctx.lineTo(x, bottomY);
       ctx.lineWidth = 1;
-      ctx.strokeStyle = '#94a3b8';
-      ctx.moveTo(snapX, chartArea.top);
-      ctx.lineTo(snapX, chartArea.bottom);
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+      ctx.setLineDash([4, 4]);
       ctx.stroke();
-    }
 
-    if (mouseY >= chartArea.top && mouseY <= chartArea.bottom) {
-      ctx.beginPath();
-      ctx.setLineDash([]);
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = '#4f8cff';
-      ctx.moveTo(chartArea.left, mouseY);
-      ctx.lineTo(chartArea.right, mouseY);
-      ctx.stroke();
-    }
+      if (y >= topY && y <= bottomY) {
+        ctx.beginPath();
+        ctx.moveTo(leftX, y);
+        ctx.lineTo(rightX, y);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#4f8cff';
+        ctx.setLineDash([]);
+        ctx.stroke();
+      }
 
-    ctx.restore();
+      ctx.restore();
+    }
   }
 };
-
 Chart.register(crosshairPlugin);
-
-function bindCrosshair(chart) {
-  const canvas = chart.canvas;
-
-  const updateCrosshair = (evt) => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = evt.clientX - rect.left;
-    const mouseY = evt.clientY - rect.top;
-    const area = chart.chartArea;
-
-    if (!area) return;
-
-    if (!(mouseX >= area.left && mouseX <= area.right && mouseY >= area.top && mouseY <= area.bottom)) {
-      chart.$crosshairSnapX = null;
-      chart.$crosshairMouseY = null;
-      chart.draw();
-      return;
-    }
-
-    const active = chart.getElementsAtEventForMode(
-      evt,
-      'index',
-      { intersect: false },
-      false
-    );
-
-    if (active && active.length) {
-      const el = active[0].element;
-      chart.$crosshairSnapX = el.x;
-    } else {
-      chart.$crosshairSnapX = null;
-    }
-
-    chart.$crosshairMouseY = mouseY;
-    chart.draw();
-  };
-
-  const clearCrosshair = () => {
-    chart.$crosshairSnapX = null;
-    chart.$crosshairMouseY = null;
-    chart.draw();
-  };
-
-  canvas.addEventListener('mousemove', updateCrosshair);
-  canvas.addEventListener('mouseleave', clearCrosshair);
-
-  canvas.addEventListener('touchmove', (e) => {
-    if (!e.touches || !e.touches.length) return;
-    const touch = e.touches[0];
-    updateCrosshair({ clientX: touch.clientX, clientY: touch.clientY });
-  }, { passive: true });
-
-  canvas.addEventListener('touchend', clearCrosshair);
-}
 
 function showStatus(msg){
   const box = document.getElementById('status');
@@ -325,7 +297,7 @@ function destroyAllCharts(){
 
 function getRangeText(sliced){
   if(!sliced || !sliced.length) return '--';
-  return `${sliced[0].date} → ${sliced[sliced.length - 1].date}`;
+  return `${sliced[sliced.length - 1].date} → ${sliced[0].date}`;
 }
 
 function getTooltipConfig() {
@@ -341,46 +313,6 @@ function getTooltipConfig() {
     titleFont:{ size:17, weight:'bold', family:'Noto Sans TC' },
     bodyFont:{ size:16, weight:'bold', family:'Noto Sans TC' },
     displayColors:false
-  };
-}
-
-function commonChartOptions(customTooltip) {
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    interaction: {
-      mode: 'index',
-      axis: 'x',
-      intersect: false
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: customTooltip
-    },
-    scales: {
-      x: {
-        reverse: false,
-        ticks: {
-          color: '#94a3b8',
-          maxRotation: 45,
-          autoSkip: true,
-          maxTicksLimit: 12
-        },
-        grid: {
-          color: '#141e2a'
-        }
-      },
-      y: {
-        ticks: {
-          color: '#94a3b8',
-          callback: (v) => Number(v).toLocaleString()
-        },
-        grid: {
-          color: '#141e2a'
-        }
-      }
-    }
   };
 }
 
@@ -417,10 +349,24 @@ function buildNetChart(canvasId, labels, netData){
         categoryPercentage: 0.8
       }]
     },
-    options: commonChartOptions(getTooltipConfig())
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: getTooltipConfig()
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { color: '#141e2a' } },
+        y: { ticks: { color: '#94a3b8', callback: (v) => Number(v).toLocaleString() }, grid: { color: '#141e2a' } }
+      }
+    }
   });
-
-  bindCrosshair(chart);
   chartInstances.push(chart);
 }
 
@@ -434,10 +380,7 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
     title:(items)=>labels[items[0].dataIndex],
     label:(ctx)=>{
       const d = ctx.raw.raw;
-      return [
-        `多方 ${Number(d[lk]||0).toLocaleString()} 口`,
-        `空方 ${Number(d[sk]||0).toLocaleString()} 口`
-      ];
+      return [`多方 ${Number(d[lk]||0).toLocaleString()} 口`,`空方 ${Number(d[sk]||0).toLocaleString()} 口`];
     }
   };
 
@@ -448,38 +391,30 @@ function buildOverlapChart(canvasId, sliced, lk, sk){
       datasets: [
         {
           label: '外層',
-          data: sliced.map(d => ({
-            x:d.date,
-            y:Math.max(d[lk]||0, d[sk]||0),
-            raw:d
-          })),
+          data: sliced.map(d => ({ x:d.date, y:Math.max(d[lk]||0, d[sk]||0), raw:d })),
           backgroundColor: sliced.map(d => ((d[lk]||0) >= (d[sk]||0) ? '#ff4d6d' : '#22c55e')),
-          grouped: false,
-          order: 2,
-          barPercentage: 0.72,
-          categoryPercentage: 0.8,
-          borderRadius: 2
+          grouped: false, order: 2, barPercentage: 0.72, categoryPercentage: 0.8, borderRadius: 2
         },
         {
           label: '內層',
-          data: sliced.map(d => ({
-            x:d.date,
-            y:Math.min(d[lk]||0, d[sk]||0),
-            raw:d
-          })),
+          data: sliced.map(d => ({ x:d.date, y:Math.min(d[lk]||0, d[sk]||0), raw:d })),
           backgroundColor: sliced.map(d => ((d[lk]||0) < (d[sk]||0) ? '#ff4d6d' : '#22c55e')),
-          grouped: false,
-          order: 1,
-          barPercentage: 0.42,
-          categoryPercentage: 0.8,
-          borderRadius: 2
+          grouped: false, order: 1, barPercentage: 0.42, categoryPercentage: 0.8, borderRadius: 2
         }
       ]
     },
-    options: commonChartOptions(ttConfig)
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', axis:'x', intersect: false },
+      plugins: { legend: { display: false }, tooltip: ttConfig },
+      scales: {
+        x: { ticks: { color: '#94a3b8', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { color: '#141e2a' } },
+        y: { ticks: { color: '#94a3b8', callback: (v) => Number(v).toLocaleString() }, grid: { color: '#141e2a' } }
+      }
+    }
   });
-
-  bindCrosshair(chart);
   chartInstances.push(chart);
 }
 
@@ -488,6 +423,23 @@ function resolveDataSource(){
   if (typeof TAIFEX_DATA !== 'undefined' && Array.isArray(TAIFEX_DATA)) return TAIFEX_DATA;
   if (window.TAIFEX_DATA && Array.isArray(window.TAIFEX_DATA)) return window.TAIFEX_DATA;
   return null;
+}
+
+function renderUpdateTime(source){
+  const el = document.getElementById('updateText');
+  if(!el) return;
+
+  if (window.TAIFEX_META && window.TAIFEX_META.updated_at) {
+    el.textContent = `資料更新時間：${window.TAIFEX_META.updated_at}`;
+    return;
+  }
+
+  if (source && source.length && source[0].date) {
+    el.textContent = `資料最新交易日：${source[0].date}`;
+    return;
+  }
+
+  el.textContent = '資料更新時間：無法判定';
 }
 
 function updateScreen() {
@@ -505,22 +457,14 @@ function updateScreen() {
   } else if (currentView === 'near') {
     parsed = allData.filter(d => d.near).map(d => ({
       date: d.date,
-      top5_l: d.near.top5_l || 0,
-      top5_s: d.near.top5_s || 0,
-      top5_n: d.near.top5_net || 0,
-      top10_l: d.near.top10_l || 0,
-      top10_s: d.near.top10_s || 0,
-      top10_n: d.near.top10_net || 0
+      top5_l: d.near.top5_l || 0, top5_s: d.near.top5_s || 0, top5_n: d.near.top5_net || 0,
+      top10_l: d.near.top10_l || 0, top10_s: d.near.top10_s || 0, top10_n: d.near.top10_net || 0
     }));
   } else {
     parsed = allData.filter(d => d.allm).map(d => ({
       date: d.date,
-      top5_l: d.allm.top5_l || 0,
-      top5_s: d.allm.top5_s || 0,
-      top5_n: d.allm.top5_net || 0,
-      top10_l: d.allm.top10_l || 0,
-      top10_s: d.allm.top10_s || 0,
-      top10_n: d.allm.top10_net || 0
+      top5_l: d.allm.top5_l || 0, top5_s: d.allm.top5_s || 0, top5_n: d.allm.top5_net || 0,
+      top10_l: d.allm.top10_l || 0, top10_s: d.allm.top10_s || 0, top10_n: d.allm.top10_net || 0
     }));
   }
 
@@ -538,7 +482,6 @@ function updateScreen() {
       return dt && dt >= cut;
     });
   }
-
   if (!sliced.length) sliced = parsed.slice(0, 250);
 
   const latest = sliced[0];
@@ -611,11 +554,14 @@ function setR(m, el) {
 
 window.onload = function() {
   const source = resolveDataSource();
+
   if (!source) {
+    renderUpdateTime(null);
     showStatus('已載入 taifex_data.js，但找不到資料變數。請確認 taifex_data.js 裡是 var myData = [...] 或 window.TAIFEX_DATA = [...]');
     return;
   }
 
+  renderUpdateTime(source);
   allData = source.slice();
   updateScreen();
 };
