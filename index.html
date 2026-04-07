@@ -285,7 +285,7 @@
         <div class="eyebrow">TAIFEX · 10Y</div>
         <h1>
           <span class="accent">台指期</span>
-          <a href="https://jk181954.github.io/stock/" target="_blank" rel="noopener noreferrer" class="link-btn">選股網站</a>
+          <a href="https://jk181954.github.io/stock/" target="_blank" rel="noopener noreferrer" class="link-btn">現貨頁面</a>
         </h1>
         <div id="update-info" class="update-info">資料更新時間：--</div>
       </div>
@@ -547,13 +547,9 @@
       const ctx = document.getElementById(canvasId).getContext('2d');
       const labels = sliced.map(d => d.date);
       const ttConfig = getTooltipConfig();
-      ttConfig.filter = item => item.datasetIndex === 0;
       ttConfig.callbacks = {
         title: items => labels[items[0].dataIndex],
-        label: ctx => {
-          const d = ctx.raw.raw;
-          return `${Number(d[lk] || 0).toLocaleString()} / ${Number(d[sk] || 0).toLocaleString()}`;
-        }
+        label: ctx => `${ctx.dataset.label}：${Number(ctx.raw || 0).toLocaleString()}`
       };
 
       const chart = new Chart(ctx, {
@@ -562,28 +558,41 @@
           labels,
           datasets: [
             {
-              label: '',
-              data: sliced.map(d => ({ x: d.date, y: Math.max(d[lk] || 0, d[sk] || 0), raw: d })),
-              backgroundColor: sliced.map(d => (d[lk] || 0) >= (d[sk] || 0) ? '#ff4d6d' : '#22c55e'),
-              grouped: false,
-              order: 2,
+              label: '多單',
+              data: sliced.map(d => d[lk] || 0),
+              backgroundColor: '#ff4d6d',
+              stack: 'oi',
+              borderRadius: 2,
               barPercentage: 0.72,
-              categoryPercentage: 0.8,
-              borderRadius: 2
+              categoryPercentage: 0.8
             },
             {
-              label: '',
-              data: sliced.map(d => ({ x: d.date, y: Math.min(d[lk] || 0, d[sk] || 0), raw: d })),
-              backgroundColor: sliced.map(d => (d[lk] || 0) >= (d[sk] || 0) ? '#ff4d6d' : '#22c55e'),
-              grouped: false,
-              order: 1,
-              barPercentage: 0.42,
-              categoryPercentage: 0.8,
-              borderRadius: 2
+              label: '空單',
+              data: sliced.map(d => d[sk] || 0),
+              backgroundColor: '#22c55e',
+              stack: 'oi',
+              borderRadius: 2,
+              barPercentage: 0.72,
+              categoryPercentage: 0.8
             }
           ]
         },
-        options: commonChartOptions(ttConfig)
+        options: {
+          ...commonChartOptions(ttConfig),
+          scales: {
+            x: {
+              reverse: false,
+              stacked: true,
+              ticks: { color: '#94a3b8', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 },
+              grid: { color: '#141e2a' }
+            },
+            y: {
+              stacked: true,
+              ticks: { color: '#94a3b8', callback: v => Number(v).toLocaleString() },
+              grid: { color: '#141e2a' }
+            }
+          }
+        }
       });
       bindCrosshair(chart);
       chartInstances.push(chart);
