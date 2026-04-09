@@ -80,29 +80,24 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
   const labels=sliced.map(d=>d.date);
   const ttConfig=getTooltipConfig();
   ttConfig.displayColors=true;
-  ttConfig.callbacks={
-    title:items=>labels[items[0].dataIndex],
-    label:ctx=>`${ctx.dataset.label}：${Number(ctx.dataset.rawValues?.[ctx.dataIndex]||0).toLocaleString()}`
-  };
 
   const longRaw=sliced.map(d=>Number(d[lk]||0));
   const shortRaw=sliced.map(d=>Number(d[sk]||0));
-  const backData=[];
-  const frontData=[];
-  const backColors=[];
-  const frontColors=[];
-  const backRaw=[];
-  const frontRaw=[];
+  const maxData=[];
+  const minData=[];
+  const maxColors=[];
+  const minColors=[];
 
   for(let i=0;i<longRaw.length;i++){
-    const l=longRaw[i];
-    const s=shortRaw[i];
+    const l=longRaw[i], s=shortRaw[i];
     if(l>=s){
-      backData.push(l); backColors.push('#ff4d6d'); backRaw.push(l);
-      frontData.push(s); frontColors.push('#22c55e'); frontRaw.push(s);
+      maxData.push(l); minData.push(s);
+      maxColors.push('rgba(255,77,109,0.35)');
+      minColors.push('#22c55e');
     }else{
-      backData.push(s); backColors.push('#22c55e'); backRaw.push(s);
-      frontData.push(l); frontColors.push('#ff4d6d'); frontRaw.push(l);
+      maxData.push(s); minData.push(l);
+      maxColors.push('rgba(34,197,94,0.35)');
+      minColors.push('#ff4d6d');
     }
   }
 
@@ -112,29 +107,28 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
       labels,
       datasets:[
         {
-          label:'後層',
-          data:backData,
-          rawValues:backRaw,
-          backgroundColor:backColors,
-          borderColor:backColors,
+          label:'較大口數',
+          data:maxData,
+          backgroundColor:maxColors,
+          borderColor:maxColors.map(c=>c.includes('255,77,109')?'rgba(255,77,109,0.7)':'rgba(34,197,94,0.7)'),
           borderWidth:1,
           grouped:false,
           order:1,
           barThickness:18,
+          maxBarThickness:18,
           categoryPercentage:.8,
-          minBarLength:2,
           borderRadius:2
         },
         {
-          label:'前層',
-          data:frontData,
-          rawValues:frontRaw,
-          backgroundColor:frontColors.map(c=>c==='\#ff4d6d'?'rgba(255,77,109,0.92)':'rgba(34,197,94,0.92)'),
-          borderColor:frontColors.map(c=>c==='\#ff4d6d'?'#ffd3dc':'#c8f7d8'),
-          borderWidth:3,
+          label:'較小口數',
+          data:minData,
+          backgroundColor:minColors,
+          borderColor:minColors.map(c=>c==='#ff4d6d'?'#ffd3dc':'#c8f7d8'),
+          borderWidth:2,
           grouped:false,
           order:2,
-          barThickness:10,
+          barThickness:8,
+          maxBarThickness:8,
           categoryPercentage:.8,
           minBarLength:2,
           borderRadius:2
