@@ -83,21 +83,23 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
 
   const longRaw=sliced.map(d=>Number(d[lk]||0));
   const shortRaw=sliced.map(d=>Number(d[sk]||0));
-  const maxData=[];
-  const minData=[];
-  const maxColors=[];
-  const minColors=[];
+  const backData=[];
+  const frontData=[];
+  const backColors=[];
+  const frontColors=[];
 
   for(let i=0;i<longRaw.length;i++){
     const l=longRaw[i], s=shortRaw[i];
     if(l>=s){
-      maxData.push(l); minData.push(s);
-      maxColors.push('rgba(255,77,109,0.35)');
-      minColors.push('#22c55e');
+      backData.push(l);
+      frontData.push(s);
+      backColors.push('rgba(255,77,109,0.32)');
+      frontColors.push('#22c55e');
     }else{
-      maxData.push(s); minData.push(l);
-      maxColors.push('rgba(34,197,94,0.35)');
-      minColors.push('#ff4d6d');
+      backData.push(s);
+      frontData.push(l);
+      backColors.push('rgba(34,197,94,0.32)');
+      frontColors.push('#ff4d6d');
     }
   }
 
@@ -107,31 +109,29 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
       labels,
       datasets:[
         {
-          label:'較大口數',
-          data:maxData,
-          backgroundColor:maxColors,
-          borderColor:maxColors.map(c=>c.includes('255,77,109')?'rgba(255,77,109,0.7)':'rgba(34,197,94,0.7)'),
-          borderWidth:1,
+          label:'後層',
+          data:backData,
+          backgroundColor:backColors,
+          borderWidth:0,
           grouped:false,
           order:1,
-          barThickness:18,
-          maxBarThickness:18,
+          barThickness:14,
+          maxBarThickness:14,
           categoryPercentage:.8,
-          borderRadius:2
+          borderRadius:0
         },
         {
-          label:'較小口數',
-          data:minData,
-          backgroundColor:minColors,
-          borderColor:minColors.map(c=>c==='#ff4d6d'?'#ffd3dc':'#c8f7d8'),
-          borderWidth:2,
+          label:'前層',
+          data:frontData,
+          backgroundColor:frontColors,
+          borderWidth:0,
           grouped:false,
           order:2,
-          barThickness:8,
-          maxBarThickness:8,
+          barThickness:14,
+          maxBarThickness:14,
           categoryPercentage:.8,
           minBarLength:2,
-          borderRadius:2
+          borderRadius:0
         }
       ]
     },
