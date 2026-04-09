@@ -75,84 +75,95 @@ function getTooltipConfig(){return{backgroundColor:'#0b1018',borderColor:'#1e2d3
 function commonChartOptions(customTooltip){return{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',axis:'x',intersect:false},plugins:{legend:{display:false},tooltip:customTooltip},scales:{x:{reverse:false,ticks:{color:'#94a3b8',maxRotation:45,autoSkip:true,maxTicksLimit:12},grid:{color:'#141e2a'}},y:{ticks:{color:'#94a3b8',callback:v=>Number(v).toLocaleString()},grid:{color:'#141e2a'}}}}}
 function chartBoxHTML(id,title,range,legendA,legendB){return `<div class="chartbox"><div class="ctop"><div class="ctitle-wrap"><span class="ctitle">${title}</span><span class="crange">${range}</span></div><div class="leg"><div class="legitem"><div class="legdot" style="background:var(--bull)"></div>${legendA}</div><div class="legitem"><div class="legdot" style="background:var(--bear)"></div>${legendB}</div></div></div><div class="canvas-wrap"><canvas id="canvas-${id}"></canvas></div></div>`}
 function buildNetChart(canvasId,labels,netData){const ctx=document.getElementById(canvasId).getContext('2d');const chart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'',data:netData,backgroundColor:netData.map(v=>v>=0?'#ff4d6d':'#22c55e'),borderRadius:3,barPercentage:.72,categoryPercentage:.8}]},options:commonChartOptions(getTooltipConfig())});bindCrosshair(chart);chartInstances.push(chart)}
-function buildOverlapChart(canvasId,sliced,lk,sk){
-  const ctx=document.getElementById(canvasId).getContext('2d');
-  const labels=sliced.map(d=>d.date);
-  const ttConfig=getTooltipConfig();
-  ttConfig.displayColors=true;
+function buildOverlapChart(canvasId, sliced, lk, sk) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const labels = sliced.map(d => d.date);
 
-  const longRaw=sliced.map(d=>Number(d[lk]||0));
-  const shortRaw=sliced.map(d=>Number(d[sk]||0));
-  const backData=[];
-  const frontData=[];
-  const backColors=[];
-  const frontColors=[];
+  const ttConfig = getTooltipConfig();
+  ttConfig.displayColors = true;
 
-  for(let i=0;i<longRaw.length;i++){
-    const l=longRaw[i], s=shortRaw[i];
-    if(l>=s){
+  const longRaw = sliced.map(d => Number(d[lk] || 0));
+  const shortRaw = sliced.map(d => Number(d[sk] || 0));
+
+  const backData = [];
+  const frontData = [];
+  const backColors = [];
+  const frontColors = [];
+
+  for (let i = 0; i < longRaw.length; i++) {
+    const l = longRaw[i];
+    const s = shortRaw[i];
+
+    if (l >= s) {
       backData.push(l);
       frontData.push(s);
-      backColors.push('rgba(255,77,109,0.32)');
-      frontColors.push('#22c55e');
-    }else{
+      backColors.push('#ff4d6d');   // 多單較大，在後
+      frontColors.push('#22c55e');  // 空單較小，在前
+    } else {
       backData.push(s);
       frontData.push(l);
-      backColors.push('rgba(34,197,94,0.32)');
-      frontColors.push('#ff4d6d');
+      backColors.push('#22c55e');   // 空單較大，在後
+      frontColors.push('#ff4d6d');  // 多單較小，在前
     }
   }
 
-  const chart=new Chart(ctx,{
-    type:'bar',
-    data:{
+  const chart = new Chart(ctx, {
+    type: 'bar',
+     {
       labels,
-      datasets:[
+      datasets: [
         {
-          label:'後層',
-          data:backData,
-          backgroundColor:backColors,
-          borderWidth:0,
-          grouped:false,
-          order:1,
-          barPercentage:.72,
-          categoryPercentage:.8,
-          borderRadius:0
+          label: '後層',
+           backData,
+          backgroundColor: backColors,
+          borderColor: backColors,
+          borderWidth: 0,
+          grouped: false,
+          order: 1,
+          barPercentage: 0.72,
+          categoryPercentage: 0.8,
+          borderRadius: 0
         },
         {
-          label:'前層',
-          data:frontData,
-          backgroundColor:frontColors,
-          borderWidth:0,
-          grouped:false,
-          order:2,
-          barPercentage:.72,
-          categoryPercentage:.8,
-          minBarLength:2,
-          borderRadius:0
+          label: '前層',
+           frontData,
+          backgroundColor: frontColors,
+          borderColor: frontColors,
+          borderWidth: 0,
+          grouped: false,
+          order: 2,
+          barPercentage: 0.42,
+          categoryPercentage: 0.8,
+          borderRadius: 0
         }
       ]
     },
-    options:{
+    options: {
       ...commonChartOptions(ttConfig),
-      plugins:{
-        legend:{display:false},
-        tooltip:{
+      plugins: {
+        legend: { display: false },
+        tooltip: {
           ...ttConfig,
-          filter:item=>item.datasetIndex===1,
-          callbacks:{
-            title:items=>labels[items[0].dataIndex],
-            label:ctx=>{
-              const i=ctx.dataIndex;
-              return [`多單：${longRaw[i].toLocaleString()}`,`空單：${shortRaw[i].toLocaleString()}`];
+          filter: item => item.datasetIndex === 1,
+          callbacks: {
+            title: items => labels[items[0].dataIndex],
+            label: ctx => {
+              const i = ctx.dataIndex;
+              return [
+                `多單：${longRaw[i].toLocaleString()}`,
+                `空單：${shortRaw[i].toLocaleString()}`
+              ];
             }
           }
         }
       }
     }
   });
-  bindCrosshair(chart);chartInstances.push(chart)
+
+  bindCrosshair(chart);
+  chartInstances.push(chart);
 }
+
 function resolveDataSource(){if(typeof myData!=='undefined'&&Array.isArray(myData))return myData;if(typeof TAIFEXDATA!=='undefined'&&Array.isArray(TAIFEXDATA))return TAIFEXDATA;if(typeof TAIFEX_DATA!=='undefined'&&Array.isArray(TAIFEX_DATA))return TAIFEX_DATA;if(window.TAIFEXDATA&&Array.isArray(window.TAIFEXDATA))return window.TAIFEXDATA;if(window.TAIFEX_DATA&&Array.isArray(window.TAIFEX_DATA))return window.TAIFEX_DATA;return null}
 function renderUpdateInfo(){const el=document.getElementById('update-info');if(!el)return;const updatedAt=window.TAIFEX_META?.updated_at||'未知';el.textContent=`資料更新時間：${updatedAt}`}
 function updateScreen(){if(!allData.length)return;let parsed;if(currentView==='inst'){const k=instSymbol==='TX'?'inst_tx':'inst_mtx';parsed=allData.filter(d=>d[k]).map(d=>({date:d.date,l:d[k].long||0,s:d[k].short||0,n:d[k].net||0}))}else if(currentView==='near'){parsed=allData.filter(d=>d.near).map(d=>({date:d.date,top5l:d.near.top5_l||0,top5s:d.near.top5_s||0,top5n:d.near.top5_net||0,top10l:d.near.top10_l||0,top10s:d.near.top10_s||0,top10n:d.near.top10_net||0}))}else{parsed=allData.filter(d=>d.allm).map(d=>({date:d.date,top5l:d.allm.top5_l||0,top5s:d.allm.top5_s||0,top5n:d.allm.top5_net||0,top10l:d.allm.top10_l||0,top10s:d.allm.top10_s||0,top10n:d.allm.top10_net||0}))}if(!parsed.length){showStatus('目前沒有可顯示資料，請確認 taifex_data.js');return}let sliced=parsed;if(activeR!=='all'){const cut=new Date();cut.setMonth(cut.getMonth()-activeR);sliced=parsed.filter(d=>{const dt=parseDateSafe(d.date);return dt&&dt>=cut})}if(!sliced.length)sliced=parsed.slice(0,250);const latest=sliced[0];const rangeText=getRangeText(sliced);if(currentView==='inst'){setCard(1,'淨口數',latest.n,latest.date,latest.n>=0?'bull':'bear');setCard(2,'正值天數',sliced.filter(x=>x.n>=0).length,'區間統計','bull');setCard(3,'多單口數',latest.l,'最新資料','gray');setCard(4,'空單口數',latest.s,'最新資料','gray')}else{setCard(1,'前5大淨口數',latest.top5n,latest.date,latest.top5n>=0?'bull':'bear');setCard(2,'前10大淨口數',latest.top10n,latest.date,latest.top10n>=0?'bull':'bear');setCard(3,'前5大多單',latest.top5l,'最新資料','gray');setCard(4,'前5大空單',latest.top5s,'最新資料','gray')}const container=document.getElementById('charts-container');destroyAllCharts();const labels=sliced.map(d=>d.date);if(currentView==='inst'){container.innerHTML=`<div class="chart-grid-2">${chartBoxHTML('inst-net',`${instSymbol} 淨口數`,rangeText,'正值','負值')}${chartBoxHTML('inst-ov',`${instSymbol} 多空口數`,rangeText,'多單','空單')}</div>`;buildNetChart('canvas-inst-net',labels,sliced.map(d=>d.n));buildOverlapChart('canvas-inst-ov',sliced,'l','s')}else{const lbl=currentView==='near'?'近月':'全月';container.innerHTML=`<div class="chart-grid-2">${chartBoxHTML('top5-net',`${lbl}前5大淨口數`,rangeText,'正值','負值')}${chartBoxHTML('top5-ov',`${lbl}前5大多空口數`,rangeText,'多單','空單')}${chartBoxHTML('top10-net',`${lbl}前10大淨口數`,rangeText,'正值','負值')}${chartBoxHTML('top10-ov',`${lbl}前10大多空口數`,rangeText,'多單','空單')}</div>`;buildNetChart('canvas-top5-net',labels,sliced.map(d=>d.top5n));buildOverlapChart('canvas-top5-ov',sliced,'top5l','top5s');buildNetChart('canvas-top10-net',labels,sliced.map(d=>d.top10n));buildOverlapChart('canvas-top10-ov',sliced,'top10l','top10s')}hideStatus()}
