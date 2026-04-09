@@ -109,10 +109,10 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
       labels,
       datasets:[
         {
-          label:'後層',
-          data:backData,
-          backgroundColor:backColors,
-          borderColor:backColors,
+          label:'前層',
+          data:frontData,
+          backgroundColor:frontColors,
+          borderColor:frontColors,
           borderWidth:0,
           grouped:false,
           order:1,
@@ -121,10 +121,10 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
           borderRadius:0
         },
         {
-          label:'前層',
-          data:frontData,
-          backgroundColor:frontColors,
-          borderColor:frontColors,
+          label:'後層',
+          data:backData,
+          backgroundColor:backColors,
+          borderColor:backColors,
           borderWidth:0,
           grouped:false,
           order:2,
@@ -140,7 +140,7 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
         legend:{display:false},
         tooltip:{
           ...ttConfig,
-          filter:item=>item.datasetIndex===1,
+          filter:item=>item.datasetIndex===0,
           callbacks:{
             title:items=>labels[items[0].dataIndex],
             label:ctx=>{
