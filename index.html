@@ -120,21 +120,23 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
           borderWidth:1,
           grouped:false,
           order:1,
-          barPercentage:.72,
+          barThickness:18,
           categoryPercentage:.8,
+          minBarLength:2,
           borderRadius:2
         },
         {
           label:'前層',
           data:frontData,
           rawValues:frontRaw,
-          backgroundColor:frontColors,
-          borderColor:frontColors,
-          borderWidth:1,
+          backgroundColor:frontColors.map(c=>c==='\#ff4d6d'?'rgba(255,77,109,0.92)':'rgba(34,197,94,0.92)'),
+          borderColor:frontColors.map(c=>c==='\#ff4d6d'?'#ffd3dc':'#c8f7d8'),
+          borderWidth:3,
           grouped:false,
           order:2,
-          barPercentage:.42,
+          barThickness:10,
           categoryPercentage:.8,
+          minBarLength:2,
           borderRadius:2
         }
       ]
