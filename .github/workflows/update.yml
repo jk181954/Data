@@ -1,8 +1,8 @@
 name: Daily Taifex Update
 
 on:
-  schedule:
-    - cron: "47 8 * * 1-5"   # 台灣時間 16:47
+#  schedule:
+#    - cron: "47 8 * * 1-5"   # 台灣時間 16:47
   workflow_dispatch:
 
 permissions:
