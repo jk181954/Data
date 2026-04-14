@@ -163,7 +163,7 @@ function setR(m,el){activeR=m;document.querySelectorAll('.tab').forEach(b=>b.cla
 window.onload=async function(){try{await loadTaifexScript()}catch(e){showStatus('taifex_data.js 載入失敗');return}const source=resolveDataSource();if(!source){showStatus('找不到 taifex_data.js 資料（請確認 window.TAIFEX_DATA）');return}allData=source.slice();renderUpdateInfo();updateScreen()};
 </script>
  <footer class="site-footer">
-  <p>自動更新時間 : 周一 ~ 周五 15:30、16:30            by cron-job.org</p>
+  <p>自動更新時間 : 周一 ~ 周五 15:30、16:30 &nbsp;&nbsp;&nbsp;&nbsp;by cron-job.org</p>
 </footer>
 
 <style>
