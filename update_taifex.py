@@ -2,7 +2,7 @@ import requests
 import json
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 JS_FILE = "taifex_data.js"
 MAX_DAYS = 2500
@@ -23,7 +23,7 @@ def fetch_large_trader(start_date, end_date):
             res = requests.post(
                 "https://www.taifex.com.tw/cht/3/largeTraderFutDown",
                 data={"queryStartDate": s_str, "queryEndDate": e_str},
-                timeout=30
+                timeout=30,
             )
             text = res.content.decode("ms950", errors="ignore")
             lines = text.strip().splitlines()
@@ -41,6 +41,7 @@ def fetch_large_trader(start_date, end_date):
         time.sleep(1)
 
     return all_rows
+
 
 
 def fetch_inst(symbol, start_date, end_date):
@@ -65,11 +66,13 @@ def fetch_inst(symbol, start_date, end_date):
         return []
 
 
+
 def to_int(value):
     try:
         return int(str(value).replace(",", "").strip())
     except Exception:
         return 0
+
 
 
 def process_data(start_date, end_date):
@@ -88,7 +91,7 @@ def process_data(start_date, end_date):
         daily_data[date]["inst_tx"] = {
             "long": l,
             "short": s,
-            "net": l - s
+            "net": l - s,
         }
 
     for d in inst_mtx_raw:
@@ -100,7 +103,7 @@ def process_data(start_date, end_date):
         daily_data[date]["inst_mtx"] = {
             "long": l,
             "short": s,
-            "net": l - s
+            "net": l - s,
         }
 
     tx_large = [
@@ -130,7 +133,7 @@ def process_data(start_date, end_date):
             "top5_net": t5l - t5s,
             "top10_l": t10l,
             "top10_s": t10s,
-            "top10_net": t10l - t10s
+            "top10_net": t10l - t10s,
         }
 
         if month == "999999":
@@ -146,6 +149,7 @@ def process_data(start_date, end_date):
     return list(daily_data.values())
 
 
+
 def load_old_data():
     if not os.path.exists(JS_FILE):
         return []
@@ -154,15 +158,20 @@ def load_old_data():
         with open(JS_FILE, "r", encoding="utf-8") as f:
             content = f.read().strip()
 
-        prefixes = [
-            "window.TAIFEX_DATA = ",
-            "var myData = "
-        ]
-
-        for prefix in prefixes:
-            if content.startswith(prefix):
-                content = content[len(prefix):]
-                break
+        if content.startswith("window.TAIFEX_META"):
+            parts = content.split("window.TAIFEX_DATA = ", 1)
+            if len(parts) == 2:
+                content = parts[1].strip()
+        else:
+            prefixes = [
+                "window.TAIFEX_DATA = ",
+                "window.TAIFEXDATA = ",
+                "var myData = ",
+            ]
+            for prefix in prefixes:
+                if content.startswith(prefix):
+                    content = content[len(prefix):]
+                    break
 
         if content.endswith(";"):
             content = content[:-1]
@@ -173,15 +182,31 @@ def load_old_data():
         return []
 
 
+
 def save_js(data):
-    js_content = "window.TAIFEX_DATA = " + json.dumps(
-        data,
-        ensure_ascii=False,
-        separators=(",", ":")
-    ) + ";\n"
+    tw_tz = timezone(timedelta(hours=8))
+    updated_at = datetime.now(tw_tz).strftime("%Y/%m/%d %H:%M:%S")
+
+    js_content = (
+        "window.TAIFEX_META = "
+        + json.dumps(
+            {"updated_at": updated_at},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        + ";\n"
+        + "window.TAIFEX_DATA = "
+        + json.dumps(
+            data,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        + ";\n"
+    )
 
     with open(JS_FILE, "w", encoding="utf-8") as f:
         f.write(js_content)
+
 
 
 def main():
@@ -190,13 +215,15 @@ def main():
     old_data = load_old_data()
     print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
 
-    end_date = datetime.now().strftime("%Y/%m/%d")
+    tw_tz = timezone(timedelta(hours=8))
+    now_tw = datetime.now(tw_tz)
+    end_date = now_tw.strftime("%Y/%m/%d")
 
     if len(old_data) == 0:
-        start_date = (datetime.now() - timedelta(days=3650)).strftime("%Y/%m/%d")
+        start_date = (now_tw - timedelta(days=3650)).strftime("%Y/%m/%d")
         print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {end_date}")
     else:
-        start_date = (datetime.now() - timedelta(days=5)).strftime("%Y/%m/%d")
+        start_date = (now_tw - timedelta(days=5)).strftime("%Y/%m/%d")
         print(f"執行增量更新: {start_date} ~ {end_date}")
 
     new_data = process_data(start_date, end_date)
