@@ -1,13 +1,11 @@
 import requests
 import json
 import os
-import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 JS_FILE = "taifex_data.js"
 MAX_DAYS = 2500
-CALENDAR_URL = "https://www.taifex.com.tw/cht/4/calendar"
 
 
 def fetch_large_trader(start_date, end_date):
@@ -25,7 +23,7 @@ def fetch_large_trader(start_date, end_date):
             res = requests.post(
                 "https://www.taifex.com.tw/cht/3/largeTraderFutDown",
                 data={"queryStartDate": s_str, "queryEndDate": e_str},
-                timeout=30,
+                timeout=30
             )
             text = res.content.decode("ms950", errors="ignore")
             lines = text.strip().splitlines()
@@ -74,39 +72,7 @@ def to_int(value):
         return 0
 
 
-def is_meaningful_trading_record(record):
-    return any(key in record for key in ("inst_tx", "inst_mtx", "near", "allm"))
-
-
-def fetch_official_trading_days(year):
-    print(f"[Calendar] 讀取官方行事曆: {year}")
-    try:
-        res = requests.get(CALENDAR_URL, timeout=30)
-        res.raise_for_status()
-        text = res.text
-    except Exception as e:
-        print(f"[Calendar] 讀取失敗: {e}")
-        return None
-
-    if str(year) not in text and str(year - 1911) not in text:
-        print(f"[Calendar] 頁面中未找到年份 {year}")
-
-    holiday_matches = set(re.findall(rf"{year}/\d{{2}}/\d{{2}}", text))
-    trading_days = set()
-
-    dt = datetime(year, 1, 1)
-    end_dt = datetime(year, 12, 31)
-    while dt <= end_dt:
-        d = dt.strftime("%Y/%m/%d")
-        if dt.weekday() < 5 and d not in holiday_matches:
-            trading_days.add(d)
-        dt += timedelta(days=1)
-
-    print(f"[Calendar] 推得交易日 {len(trading_days)} 天，休市日 {len(holiday_matches)} 天")
-    return trading_days
-
-
-def process_data(start_date, end_date, official_days=None):
+def process_data(start_date, end_date):
     large_raw = fetch_large_trader(start_date, end_date)
     inst_tx_raw = fetch_inst("TX", start_date, end_date)
     inst_mtx_raw = fetch_inst("MTX", start_date, end_date)
@@ -115,26 +81,26 @@ def process_data(start_date, end_date, official_days=None):
 
     for d in inst_tx_raw:
         date = d["date"].replace("-", "/")
-        l = to_int(d.get("long_open_interest_balance_volume", 0))
-        s = to_int(d.get("short_open_interest_balance_volume", 0))
+        l = d.get("long_open_interest_balance_volume", 0)
+        s = d.get("short_open_interest_balance_volume", 0)
         if date not in daily_data:
             daily_data[date] = {"date": date}
         daily_data[date]["inst_tx"] = {
             "long": l,
             "short": s,
-            "net": l - s,
+            "net": l - s
         }
 
     for d in inst_mtx_raw:
         date = d["date"].replace("-", "/")
-        l = to_int(d.get("long_open_interest_balance_volume", 0))
-        s = to_int(d.get("short_open_interest_balance_volume", 0))
+        l = d.get("long_open_interest_balance_volume", 0)
+        s = d.get("short_open_interest_balance_volume", 0)
         if date not in daily_data:
             daily_data[date] = {"date": date}
         daily_data[date]["inst_mtx"] = {
             "long": l,
             "short": s,
-            "net": l - s,
+            "net": l - s
         }
 
     tx_large = [
@@ -164,7 +130,7 @@ def process_data(start_date, end_date, official_days=None):
             "top5_net": t5l - t5s,
             "top10_l": t10l,
             "top10_s": t10s,
-            "top10_net": t10l - t10s,
+            "top10_net": t10l - t10s
         }
 
         if month == "999999":
@@ -177,10 +143,7 @@ def process_data(start_date, end_date, official_days=None):
     for date in daily_data:
         daily_data[date].pop("_near_month", None)
 
-    rows = [d for d in daily_data.values() if is_meaningful_trading_record(d)]
-    if official_days is not None:
-        rows = [d for d in rows if d.get("date") in official_days]
-    return rows
+    return list(daily_data.values())
 
 
 def load_old_data():
@@ -191,20 +154,15 @@ def load_old_data():
         with open(JS_FILE, "r", encoding="utf-8") as f:
             content = f.read().strip()
 
-        if content.startswith("window.TAIFEX_META"):
-            parts = content.split("window.TAIFEX_DATA = ", 1)
-            if len(parts) == 2:
-                content = parts[1].strip()
-        else:
-            prefixes = [
-                "window.TAIFEX_DATA = ",
-                "window.TAIFEXDATA = ",
-                "var myData = ",
-            ]
-            for prefix in prefixes:
-                if content.startswith(prefix):
-                    content = content[len(prefix):]
-                    break
+        prefixes = [
+            "window.TAIFEX_DATA = ",
+            "var myData = "
+        ]
+
+        for prefix in prefixes:
+            if content.startswith(prefix):
+                content = content[len(prefix):]
+                break
 
         if content.endswith(";"):
             content = content[:-1]
@@ -216,71 +174,33 @@ def load_old_data():
 
 
 def save_js(data):
-    tw_tz = timezone(timedelta(hours=8))
-    updated_at = datetime.now(tw_tz).strftime("%Y/%m/%d %H:%M:%S")
-
-    js_content = (
-        "window.TAIFEX_META = "
-        + json.dumps(
-            {"updated_at": updated_at},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        + ";\n"
-        + "window.TAIFEX_DATA = "
-        + json.dumps(
-            data,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        + ";\n"
-    )
+    js_content = "window.TAIFEX_DATA = " + json.dumps(
+        data,
+        ensure_ascii=False,
+        separators=(",", ":")
+    ) + ";\n"
 
     with open(JS_FILE, "w", encoding="utf-8") as f:
         f.write(js_content)
 
 
 def main():
-    print("=== 啟動台指期資料更新（官方交易日版）===")
+    print("=== 啟動台指期資料更新 ===")
 
     old_data = load_old_data()
     print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
 
-    tw_tz = timezone(timedelta(hours=8))
-    now_tw = datetime.now(tw_tz)
-    today = now_tw.strftime("%Y/%m/%d")
-    end_date = today
-    official_days = fetch_official_trading_days(now_tw.year)
-
-    if official_days is None:
-        print("無法取得官方行事曆，停止更新。")
-        return
-
-    if today not in official_days:
-        print(f"今天 {today} 不在官方交易日名單中，跳過更新。")
-        return
+    end_date = datetime.now().strftime("%Y/%m/%d")
 
     if len(old_data) == 0:
-        start_date = (now_tw - timedelta(days=3650)).strftime("%Y/%m/%d")
+        start_date = (datetime.now() - timedelta(days=3650)).strftime("%Y/%m/%d")
         print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {end_date}")
     else:
-        start_date = (now_tw - timedelta(days=5)).strftime("%Y/%m/%d")
+        start_date = (datetime.now() - timedelta(days=5)).strftime("%Y/%m/%d")
         print(f"執行增量更新: {start_date} ~ {end_date}")
 
-    new_data = process_data(start_date, end_date, official_days=official_days)
-    print(f"本次成功抓取 {len(new_data)} 個官方交易日資料")
-
-    if old_data:
-        old_dates = {d["date"] for d in old_data}
-        today_rows = [d for d in new_data if d.get("date") == today]
-        truly_new_today_rows = [
-            d for d in today_rows
-            if d.get("date") not in old_dates
-            or d != next((o for o in old_data if o.get("date") == d.get("date")), None)
-        ]
-        if not truly_new_today_rows:
-            print(f"今天 {today} 沒有確認到新的交易資料，跳過寫入。")
-            return
+    new_data = process_data(start_date, end_date)
+    print(f"本次成功抓取 {len(new_data)} 個交易日")
 
     data_dict = {d["date"]: d for d in old_data}
     for d in new_data:
