@@ -208,7 +208,7 @@ function buildOverlapChart(canvasId, sliced, lk, sk, groupId){
   const boxEl=document.getElementById('box-'+canvasId.replace('canvas-',''));
   const ctx=document.getElementById(canvasId).getContext('2d');
   const labels=sliced.map(d=>d.date);
-  const ttConfig=getTooltipConfig();ttConfig.displayColors=true;
+  const ttConfig=getTooltipConfig();
   const longRaw=sliced.map(d=>Number(d[lk]||0));
   const shortRaw=sliced.map(d=>Number(d[sk]||0));
   const backData=[],frontData=[],backColors=[],frontColors=[];
