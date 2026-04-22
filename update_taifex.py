@@ -7,6 +7,36 @@ from datetime import datetime, timedelta, timezone
 JS_FILE = "taifex_data.js"
 MAX_DAYS = 2500
 
+TW_TZ = timezone(timedelta(hours=8))
+
+
+# ─────────────────────────────────────────────
+# 判斷今天是否為交易日
+# 做法：直接查詢 TWSE 當天的市場成交資訊
+# 若回傳有效資料 → 交易日；若回傳空白/錯誤 → 非交易日
+# ─────────────────────────────────────────────
+def is_trading_day(date_str: str) -> bool:
+    """
+    date_str 格式：YYYYMMDD
+    呼叫 TWSE 公開 API 確認當日是否有開盤。
+    回傳 True = 交易日，False = 非交易日。
+    """
+    url = (
+        "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK"
+        f"?date={date_str}&response=json"
+    )
+    try:
+        res = requests.get(url, timeout=15)
+        data = res.json()
+        # stat == "OK" 且 data 非空 → 有成交，為交易日
+        if data.get("stat") == "OK" and data.get("data"):
+            return True
+        return False
+    except Exception as e:
+        print(f"[交易日判斷] 查詢失敗: {e}")
+        # 查詢失敗時保守處理：視為非交易日，避免重複抓空資料
+        return False
+
 
 def fetch_large_trader(start_date, end_date):
     all_rows = []
@@ -43,7 +73,6 @@ def fetch_large_trader(start_date, end_date):
     return all_rows
 
 
-
 def fetch_inst(symbol, start_date, end_date):
     s_str = start_date.replace("/", "-")
     e_str = end_date.replace("/", "-")
@@ -66,13 +95,11 @@ def fetch_inst(symbol, start_date, end_date):
         return []
 
 
-
 def to_int(value):
     try:
         return int(str(value).replace(",", "").strip())
     except Exception:
         return 0
-
 
 
 def process_data(start_date, end_date):
@@ -88,11 +115,7 @@ def process_data(start_date, end_date):
         s = d.get("short_open_interest_balance_volume", 0)
         if date not in daily_data:
             daily_data[date] = {"date": date}
-        daily_data[date]["inst_tx"] = {
-            "long": l,
-            "short": s,
-            "net": l - s,
-        }
+        daily_data[date]["inst_tx"] = {"long": l, "short": s, "net": l - s}
 
     for d in inst_mtx_raw:
         date = d["date"].replace("-", "/")
@@ -100,11 +123,7 @@ def process_data(start_date, end_date):
         s = d.get("short_open_interest_balance_volume", 0)
         if date not in daily_data:
             daily_data[date] = {"date": date}
-        daily_data[date]["inst_mtx"] = {
-            "long": l,
-            "short": s,
-            "net": l - s,
-        }
+        daily_data[date]["inst_mtx"] = {"long": l, "short": s, "net": l - s}
 
     tx_large = [
         r for r in large_raw
@@ -149,7 +168,6 @@ def process_data(start_date, end_date):
     return list(daily_data.values())
 
 
-
 def load_old_data():
     if not os.path.exists(JS_FILE):
         return []
@@ -182,10 +200,8 @@ def load_old_data():
         return []
 
 
-
 def save_js(data):
-    tw_tz = timezone(timedelta(hours=8))
-    updated_at = datetime.now(tw_tz).strftime("%Y/%m/%d %H:%M:%S")
+    updated_at = datetime.now(TW_TZ).strftime("%Y/%m/%d %H:%M:%S")
 
     js_content = (
         "window.TAIFEX_META = "
@@ -208,32 +224,49 @@ def save_js(data):
         f.write(js_content)
 
 
-
 def main():
     print("=== 啟動台指期資料更新 ===")
+
+    now_tw = datetime.now(TW_TZ)
+    today_str_api = now_tw.strftime("%Y%m%d")   # TWSE API 格式 YYYYMMDD
+    today_str     = now_tw.strftime("%Y/%m/%d")  # 資料日期格式
+
+    # ── 交易日檢查 ──────────────────────────────────
+    # 週末直接跳過（避免多打一次 API）
+    if now_tw.weekday() >= 5:  # 5=Saturday, 6=Sunday
+        print(f"[跳過] 今天 {today_str} 是週末，非交易日，結束。")
+        return
+
+    print(f"[交易日判斷] 確認 {today_str} 是否開盤...")
+    if not is_trading_day(today_str_api):
+        print(f"[跳過] 今天 {today_str} 非交易日（國定假日或其他休市），結束。")
+        return
+
+    print(f"[交易日確認] {today_str} 為交易日，開始更新。")
+    # ────────────────────────────────────────────────
 
     old_data = load_old_data()
     print(f"已讀取本地端資料: 共 {len(old_data)} 筆")
 
-    tw_tz = timezone(timedelta(hours=8))
-    now_tw = datetime.now(tw_tz)
-    end_date = now_tw.strftime("%Y/%m/%d")
-
     if len(old_data) == 0:
         start_date = (now_tw - timedelta(days=3650)).strftime("%Y/%m/%d")
-        print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {end_date}")
+        print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {today_str}")
     else:
         start_date = (now_tw - timedelta(days=5)).strftime("%Y/%m/%d")
-        print(f"執行增量更新: {start_date} ~ {end_date}")
+        print(f"執行增量更新: {start_date} ~ {today_str}")
 
-    new_data = process_data(start_date, end_date)
+    new_data = process_data(start_date, today_str)
     print(f"本次成功抓取 {len(new_data)} 個交易日")
 
     data_dict = {d["date"]: d for d in old_data}
     for d in new_data:
         data_dict[d["date"]] = d
 
-    final_data = sorted(list(data_dict.values()), key=lambda x: x["date"], reverse=True)
+    final_data = sorted(
+        list(data_dict.values()),
+        key=lambda x: x["date"],
+        reverse=True,
+    )
 
     if len(final_data) > MAX_DAYS:
         final_data = final_data[:MAX_DAYS]
