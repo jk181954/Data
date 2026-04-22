@@ -252,9 +252,11 @@ def main():
         start_date = (now_tw - timedelta(days=3650)).strftime("%Y/%m/%d")
         print(f"首次執行，準備抓取 10 年資料: {start_date} ~ {today_str}")
     else:
-        start_date = (now_tw - timedelta(days=5)).strftime("%Y/%m/%d")
-        print(f"執行增量更新: {start_date} ~ {today_str}")
-
+#        start_date = (now_tw - timedelta(days=5)).strftime("%Y/%m/%d") #抓5天資料
+#       print(f"執行增量更新: {start_date} ~ {today_str}")
+        start_date = today_str  # ← 直接用今天，不回溯
+        print(f"執行增量更新（僅當天）: {start_date}")
+        
     new_data = process_data(start_date, today_str)
     print(f"本次成功抓取 {len(new_data)} 個交易日")
 
