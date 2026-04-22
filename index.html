@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TAIFEX Dashboard</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root { --bg:#06090f; --bg2:#0b1018; --bg3:#0f1520; --bdr:#18222e; --bdr2:#1e2d3e; --bull:#ff4d6d; --bear:#22c55e; --blue:#4f8cff; --text:#f8fafc; --muted:#94a3b8; --muted2:#64748b; --mono:"JetBrains Mono", monospace; --sans:"Noto Sans TC", sans-serif; }
@@ -22,6 +24,12 @@
     .toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:14px 14px;margin-bottom:14px}
     .tool-left{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.tabs{display:flex;gap:6px;flex-wrap:wrap}
     .tab{padding:8px 12px;border-radius:8px;font-size:13px;font-family:var(--mono);font-weight:800;cursor:pointer;border:1px solid var(--bdr);color:var(--muted);background:transparent;transition:all .18s}.tab:hover{border-color:var(--bdr2);color:var(--text)}.tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
+    /* Reset zoom button */
+    .reset-zoom-btn{padding:8px 12px;border-radius:8px;font-size:12px;font-family:var(--mono);font-weight:800;cursor:pointer;border:1px solid var(--bdr2);color:var(--muted);background:var(--bg3);transition:all .18s;white-space:nowrap}
+    .reset-zoom-btn:hover{border-color:var(--blue);color:var(--blue)}
+    /* Pan hint */
+    .pan-hint{font-size:11px;color:var(--muted2);font-family:var(--mono);display:flex;align-items:center;gap:6px;white-space:nowrap}
+    .pan-hint svg{opacity:.6}
     #status{display:none;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--bdr2);border-radius:10px;margin-bottom:12px;font-size:13px;color:#ff4d6d;font-weight:700}#status.show{display:flex}
     .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;min-height:108px}
     .card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px}.card.bull::before{background:var(--bull)}.card.bear::before{background:var(--bear)}.card.gray::before{background:#8b95a7}
@@ -29,6 +37,8 @@
     .chart-grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.chartbox{background:var(--bg2);border:1px solid var(--bdr);border-radius:16px;padding:16px 14px 14px;margin-bottom:12px}
     .ctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px}.ctitle-wrap{display:flex;flex-direction:column;gap:4px}.ctitle{font-size:16px;font-weight:900;color:var(--text)}.crange{font-size:12px;color:var(--muted);font-family:var(--mono)}
     .leg{display:flex;gap:14px}.legitem{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:var(--muted)}.legdot{width:10px;height:10px;border-radius:3px}.canvas-wrap{position:relative;height:320px}canvas{display:block;width:100%!important;height:100%!important}
+    /* Zoom state indicator on chartbox */
+    .chartbox.is-zoomed .ctitle::after{content:" 🔍";font-size:12px;opacity:.7}
     @media (max-width:900px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.chart-grid-2{grid-template-columns:1fr}}
     @media (max-width:600px){header{flex-direction:column;align-items:flex-start}.header-right{width:100%;margin-top:8px}.symbol-group{width:100%;display:flex}.s-tab{flex:1;text-align:center;padding:8px 4px;font-size:12px}}
     @media (max-width:480px){.cval{font-size:24px}.tab{font-size:12px;padding:7px 8px}.canvas-wrap{height:280px}.link-btn{width:100%}}
@@ -50,7 +60,24 @@
         </div>
       </div>
     </header>
-    <div class="toolbar"><div class="tool-left"><div class="tabs"><button class="tab" onclick="setR(1,this)">1M</button><button class="tab on" onclick="setR(3,this)">3M</button><button class="tab" onclick="setR(6,this)">6M</button><button class="tab" onclick="setR(12,this)">1Y</button><button class="tab" onclick="setR(24,this)">2Y</button><button class="tab" onclick="setR(60,this)">5Y</button><button class="tab" onclick="setR('all',this)">全部</button></div></div></div>
+    <div class="toolbar">
+      <div class="tool-left">
+        <div class="tabs">
+          <button class="tab" onclick="setR(1,this)">1M</button>
+          <button class="tab on" onclick="setR(3,this)">3M</button>
+          <button class="tab" onclick="setR(6,this)">6M</button>
+          <button class="tab" onclick="setR(12,this)">1Y</button>
+          <button class="tab" onclick="setR(24,this)">2Y</button>
+          <button class="tab" onclick="setR(60,this)">5Y</button>
+          <button class="tab" onclick="setR('all',this)">全部</button>
+        </div>
+        <span class="pan-hint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+          拖曳平移 · 滾輪縮放
+        </span>
+      </div>
+      <button class="reset-zoom-btn" onclick="resetAllZoom()">↺ 重置縮放</button>
+    </div>
     <div id="status"><span id="smsg"></span></div>
     <div class="stats">
       <div class="card gray" id="c1"><div class="clabel" id="l1">———</div><div class="cval gray" id="v1">———</div><div class="csub" id="s1">———</div></div>
@@ -58,86 +85,157 @@
       <div class="card gray" id="c3"><div class="clabel" id="l3">———</div><div class="cval gray" id="v3">———</div><div class="csub" id="s3">———</div></div>
       <div class="card gray" id="c4"><div class="clabel" id="l4">———</div><div class="cval gray" id="v4">———</div><div class="csub" id="s4">———</div></div>
     </div>
-    <div id="inst-sub-tabs" style="margin-bottom:12px;"><div class="symbol-group"><button class="s-tab on" id="btn-sym-tx" onclick="switchInstSymbol('TX')">台指期（TX）</button><button class="s-tab" id="btn-sym-mtx" onclick="switchInstSymbol('MTX')">小型台指（MTX）</button></div></div>
+    <div id="inst-sub-tabs" style="margin-bottom:12px;">
+      <div class="symbol-group">
+        <button class="s-tab on" id="btn-sym-tx" onclick="switchInstSymbol('TX')">台指期（TX）</button>
+        <button class="s-tab" id="btn-sym-mtx" onclick="switchInstSymbol('MTX')">小型台指（MTX）</button>
+      </div>
+    </div>
     <div id="charts-container"></div>
   </div>
+
 <script>
 let allData=[];let currentView='inst';let instSymbol='TX';let activeR=3;let chartInstances=[];
-const crosshairPlugin={id:'crosshairPlugin',afterDraw(chart){const{ctx,chartArea}=chart;if(!chartArea)return;const snapX=chart.crosshairSnapX;const mouseY=chart.crosshairMouseY;if(snapX==null||mouseY==null)return;ctx.save();if(snapX>=chartArea.left&&snapX<=chartArea.right){ctx.beginPath();ctx.setLineDash([6,6]);ctx.lineWidth=1;ctx.strokeStyle='#94a3b8';ctx.moveTo(snapX,chartArea.top);ctx.lineTo(snapX,chartArea.bottom);ctx.stroke()}if(mouseY>=chartArea.top&&mouseY<=chartArea.bottom){ctx.beginPath();ctx.setLineDash([]);ctx.lineWidth=1.4;ctx.strokeStyle='#4f8cff';ctx.moveTo(chartArea.left,mouseY);ctx.lineTo(chartArea.right,mouseY);ctx.stroke()}ctx.restore()}};Chart.register(crosshairPlugin);
+
+// ── crosshair plugin (原版保留) ──────────────────────────────────────────────
+const crosshairPlugin={id:'crosshairPlugin',afterDraw(chart){const{ctx,chartArea}=chart;if(!chartArea)return;const snapX=chart.crosshairSnapX;const mouseY=chart.crosshairMouseY;if(snapX==null||mouseY==null)return;ctx.save();if(snapX>=chartArea.left&&snapX<=chartArea.right){ctx.beginPath();ctx.setLineDash([6,6]);ctx.lineWidth=1;ctx.strokeStyle='#94a3b8';ctx.moveTo(snapX,chartArea.top);ctx.lineTo(snapX,chartArea.bottom);ctx.stroke()}if(mouseY>=chartArea.top&&mouseY<=chartArea.bottom){ctx.beginPath();ctx.setLineDash([]);ctx.lineWidth=1.4;ctx.strokeStyle='#4f8cff';ctx.moveTo(chartArea.left,mouseY);ctx.lineTo(chartArea.right,mouseY);ctx.stroke()}ctx.restore()}};
+Chart.register(crosshairPlugin);
+
 function loadTaifexScript(){return new Promise((resolve,reject)=>{const old=document.getElementById('taifex-data-script');if(old)old.remove();const s=document.createElement('script');s.id='taifex-data-script';s.src=`./taifex_data.js?v=${Date.now()}`;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}
-function bindCrosshair(chart){const canvas=chart.canvas;const updateCrosshair=evt=>{const rect=canvas.getBoundingClientRect();const mouseX=evt.clientX-rect.left;const mouseY=evt.clientY-rect.top;const area=chart.chartArea;if(!area)return;if(!(mouseX>=area.left&&mouseX<=area.right&&mouseY>=area.top&&mouseY<=area.bottom)){chart.crosshairSnapX=null;chart.crosshairMouseY=null;chart.draw();return}const active=chart.getElementsAtEventForMode(evt,'index',{intersect:false},false);if(active&&active.length){const el=active[0].element;chart.crosshairSnapX=el.x}else{chart.crosshairSnapX=null}chart.crosshairMouseY=mouseY;chart.draw()};const clearCrosshair=()=>{chart.crosshairSnapX=null;chart.crosshairMouseY=null;chart.draw()};canvas.addEventListener('mousemove',updateCrosshair);canvas.addEventListener('mouseleave',clearCrosshair);canvas.addEventListener('touchmove',e=>{if(!e.touches||!e.touches.length)return;const touch=e.touches[0];updateCrosshair({clientX:touch.clientX,clientY:touch.clientY})},{passive:true});canvas.addEventListener('touchend',clearCrosshair)}
-function showStatus(msg){const box=document.getElementById('status');document.getElementById('smsg').textContent=msg;box.classList.add('show')}function hideStatus(){document.getElementById('status').classList.remove('show')}
+
+function bindCrosshair(chart){
+  const canvas=chart.canvas;
+  const updateCrosshair=evt=>{
+    // 若正在拖曳平移，不顯示 crosshair
+    if(chart._panning){chart.crosshairSnapX=null;chart.crosshairMouseY=null;chart.draw();return}
+    const rect=canvas.getBoundingClientRect();
+    const mouseX=evt.clientX-rect.left;const mouseY=evt.clientY-rect.top;
+    const area=chart.chartArea;if(!area)return;
+    if(!(mouseX>=area.left&&mouseX<=area.right&&mouseY>=area.top&&mouseY<=area.bottom)){chart.crosshairSnapX=null;chart.crosshairMouseY=null;chart.draw();return}
+    const active=chart.getElementsAtEventForMode(evt,'index',{intersect:false},false);
+    if(active&&active.length){const el=active[0].element;chart.crosshairSnapX=el.x}else{chart.crosshairSnapX=null}
+    chart.crosshairMouseY=mouseY;chart.draw()
+  };
+  const clearCrosshair=()=>{chart.crosshairSnapX=null;chart.crosshairMouseY=null;chart.draw()};
+  canvas.addEventListener('mousemove',updateCrosshair);
+  canvas.addEventListener('mouseleave',clearCrosshair);
+  canvas.addEventListener('touchmove',e=>{if(!e.touches||!e.touches.length)return;const touch=e.touches[0];updateCrosshair({clientX:touch.clientX,clientY:touch.clientY})},{passive:true});
+  canvas.addEventListener('touchend',clearCrosshair)
+}
+
+function showStatus(msg){const box=document.getElementById('status');document.getElementById('smsg').textContent=msg;box.classList.add('show')}
+function hideStatus(){document.getElementById('status').classList.remove('show')}
 function parseDateSafe(str){if(!str)return null;const p=str.split('/');if(p.length!==3)return new Date(str);return new Date(Number(p[0]),Number(p[1])-1,Number(p[2]))}
 function setCard(idx,label,val,sub,tone=null){document.getElementById('l'+idx).textContent=label;document.getElementById('v'+idx).textContent=typeof val==='number'?val.toLocaleString():val;document.getElementById('s'+idx).textContent=sub;document.getElementById('c'+idx).className='card '+(tone||'gray');document.getElementById('v'+idx).className='cval '+(tone||'gray')}
 function destroyAllCharts(){chartInstances.forEach(ch=>{if(ch)ch.destroy()});chartInstances=[]}
 function getRangeText(sliced){if(!sliced||!sliced.length)return '--';return sliced[0].date+' ~ '+sliced[sliced.length-1].date}
+
+// ── tooltip config ───────────────────────────────────────────────────────────
 function getTooltipConfig(){return{backgroundColor:'#0b1018',borderColor:'#1e2d3e',borderWidth:1,padding:16,cornerRadius:10,caretSize:8,titleColor:'#fff',bodyColor:'#fff',titleFont:{size:17,weight:'bold',family:'Noto Sans TC'},bodyFont:{size:16,weight:'bold',family:'Noto Sans TC'},displayColors:false}}
-function commonChartOptions(customTooltip){return{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',axis:'x',intersect:false},plugins:{legend:{display:false},tooltip:customTooltip},scales:{x:{reverse:false,ticks:{color:'#94a3b8',maxRotation:45,autoSkip:true,maxTicksLimit:12},grid:{color:'#141e2a'}},y:{ticks:{color:'#94a3b8',callback:v=>Number(v).toLocaleString()},grid:{color:'#141e2a'}}}}}
-function chartBoxHTML(id,title,range,legendA,legendB){return `<div class="chartbox"><div class="ctop"><div class="ctitle-wrap"><span class="ctitle">${title}</span><span class="crange">${range}</span></div><div class="leg"><div class="legitem"><div class="legdot" style="background:var(--bull)"></div>${legendA}</div><div class="legitem"><div class="legdot" style="background:var(--bear)"></div>${legendB}</div></div></div><div class="canvas-wrap"><canvas id="canvas-${id}"></canvas></div></div>`}
-function buildNetChart(canvasId,labels,netData){const ctx=document.getElementById(canvasId).getContext('2d');const chart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'',data:netData,backgroundColor:netData.map(v=>v>=0?'#ff4d6d':'#22c55e'),borderRadius:3,barPercentage:.72,categoryPercentage:.8}]},options:commonChartOptions(getTooltipConfig())});bindCrosshair(chart);chartInstances.push(chart)}
-function buildOverlapChart(canvasId,sliced,lk,sk){
-  const ctx=document.getElementById(canvasId).getContext('2d');
-  const labels=sliced.map(d=>d.date);
-  const ttConfig=getTooltipConfig();
-  ttConfig.displayColors=true;
 
-  const longRaw=sliced.map(d=>Number(d[lk]||0));
-  const shortRaw=sliced.map(d=>Number(d[sk]||0));
-  const backData=[];
-  const frontData=[];
-  const backColors=[];
-  const frontColors=[];
+// ── zoom plugin 共用設定 ─────────────────────────────────────────────────────
+function getZoomConfig(chartboxEl){
+  return {
+    pan:{
+      enabled:true,
+      mode:'x',
+      threshold:3,
+      onPanStart(){chartboxEl&&chartboxEl.classList.add('is-zoomed')},
+      onPanComplete({chart}){
+        // 若縮放量回到初始，移除樣式
+        const state=chart.getZoomLevel();
+        if(state===1)chartboxEl&&chartboxEl.classList.remove('is-zoomed')
+      }
+    },
+    zoom:{
+      wheel:{enabled:true,speed:0.08},
+      pinch:{enabled:true},
+      mode:'x',
+      onZoomStart(){chartboxEl&&chartboxEl.classList.add('is-zoomed')},
+      onZoomComplete({chart}){
+        const state=chart.getZoomLevel();
+        if(state===1)chartboxEl&&chartboxEl.classList.remove('is-zoomed')
+      }
+    },
+    limits:{x:{minRange:5}}  // 最小顯示 5 筆，避免縮太小
+  }
+}
 
-  for(let i=0;i<longRaw.length;i++){
-    const l=longRaw[i], s=shortRaw[i];
-    if(l>=s){
-      backData.push(l);
-      frontData.push(s);
-      backColors.push('#ff4d6d');
-      frontColors.push('#22c55e');
-    }else{
-      backData.push(s);
-      frontData.push(l);
-      backColors.push('#22c55e');
-      frontColors.push('#ff4d6d');
+// ── 重置所有圖表縮放 ─────────────────────────────────────────────────────────
+function resetAllZoom(){
+  chartInstances.forEach(ch=>{if(ch&&ch.resetZoom)ch.resetZoom()});
+  document.querySelectorAll('.chartbox.is-zoomed').forEach(el=>el.classList.remove('is-zoomed'))
+}
+
+// ── 共用 chart options (加入 zoom plugin) ───────────────────────────────────
+function commonChartOptions(customTooltip, chartboxEl){
+  return{
+    responsive:true,
+    maintainAspectRatio:false,
+    animation:false,
+    interaction:{mode:'index',axis:'x',intersect:false},
+    plugins:{
+      legend:{display:false},
+      tooltip:customTooltip,
+      zoom:getZoomConfig(chartboxEl)
+    },
+    scales:{
+      x:{
+        reverse:false,
+        ticks:{color:'#94a3b8',maxRotation:45,autoSkip:true,maxTicksLimit:12},
+        grid:{color:'#141e2a'}
+      },
+      y:{
+        ticks:{color:'#94a3b8',callback:v=>Number(v).toLocaleString()},
+        grid:{color:'#141e2a'}
+      }
     }
   }
+}
 
+function chartBoxHTML(id,title,range,legendA,legendB){
+  return `<div class="chartbox" id="box-${id}"><div class="ctop"><div class="ctitle-wrap"><span class="ctitle">${title}</span><span class="crange">${range}</span></div><div class="leg"><div class="legitem"><div class="legdot" style="background:var(--bull)"></div>${legendA}</div><div class="legitem"><div class="legdot" style="background:var(--bear)"></div>${legendB}</div></div></div><div class="canvas-wrap"><canvas id="canvas-${id}"></canvas></div></div>`
+}
+
+function buildNetChart(canvasId,labels,netData){
+  const boxEl=document.getElementById('box-'+canvasId.replace('canvas-',''));
+  const ctx=document.getElementById(canvasId).getContext('2d');
+  const chart=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[{label:'',data:netData,backgroundColor:netData.map(v=>v>=0?'#ff4d6d':'#22c55e'),borderRadius:3,barPercentage:.72,categoryPercentage:.8}]},
+    options:commonChartOptions(getTooltipConfig(),boxEl)
+  });
+  bindCrosshair(chart);
+  chartInstances.push(chart)
+}
+
+function buildOverlapChart(canvasId,sliced,lk,sk){
+  const boxEl=document.getElementById('box-'+canvasId.replace('canvas-',''));
+  const ctx=document.getElementById(canvasId).getContext('2d');
+  const labels=sliced.map(d=>d.date);
+  const ttConfig=getTooltipConfig();ttConfig.displayColors=true;
+  const longRaw=sliced.map(d=>Number(d[lk]||0));
+  const shortRaw=sliced.map(d=>Number(d[sk]||0));
+  const backData=[],frontData=[],backColors=[],frontColors=[];
+  for(let i=0;i<longRaw.length;i++){
+    const l=longRaw[i],s=shortRaw[i];
+    if(l>=s){backData.push(l);frontData.push(s);backColors.push('#ff4d6d');frontColors.push('#22c55e')}
+    else{backData.push(s);frontData.push(l);backColors.push('#22c55e');frontColors.push('#ff4d6d')}
+  }
+  const baseOpts=commonChartOptions(ttConfig,boxEl);
   const chart=new Chart(ctx,{
     type:'bar',
     data:{
       labels,
       datasets:[
-        {
-          label:'前層',
-          data:frontData,
-          backgroundColor:frontColors,
-          borderColor:frontColors,
-          borderWidth:0,
-          grouped:false,
-          order:1,
-          barPercentage:.72,
-          categoryPercentage:.8,
-          borderRadius:0
-        },
-        {
-          label:'後層',
-          data:backData,
-          backgroundColor:backColors,
-          borderColor:backColors,
-          borderWidth:0,
-          grouped:false,
-          order:2,
-          barPercentage:.72,
-          categoryPercentage:.8,
-          borderRadius:0
-        }
+        {label:'前層',data:frontData,backgroundColor:frontColors,borderColor:frontColors,borderWidth:0,grouped:false,order:1,barPercentage:.72,categoryPercentage:.8,borderRadius:0},
+        {label:'後層',data:backData,backgroundColor:backColors,borderColor:backColors,borderWidth:0,grouped:false,order:2,barPercentage:.72,categoryPercentage:.8,borderRadius:0}
       ]
     },
     options:{
-      ...commonChartOptions(ttConfig),
+      ...baseOpts,
       plugins:{
-        legend:{display:false},
+        ...baseOpts.plugins,
         tooltip:{
           ...ttConfig,
           filter:item=>item.datasetIndex===0,
@@ -145,41 +243,68 @@ function buildOverlapChart(canvasId,sliced,lk,sk){
             title:items=>labels[items[0].dataIndex],
             label:ctx=>{
               const i=ctx.dataIndex;
-              return [`多單：${longRaw[i].toLocaleString()}`,`空單：${shortRaw[i].toLocaleString()}`];
+              return[`多單：${longRaw[i].toLocaleString()}`,`空單：${shortRaw[i].toLocaleString()}`]
             }
           }
         }
       }
     }
   });
-  bindCrosshair(chart);chartInstances.push(chart)
+  bindCrosshair(chart);
+  chartInstances.push(chart)
 }
+
 function resolveDataSource(){if(typeof myData!=='undefined'&&Array.isArray(myData))return myData;if(typeof TAIFEXDATA!=='undefined'&&Array.isArray(TAIFEXDATA))return TAIFEXDATA;if(typeof TAIFEX_DATA!=='undefined'&&Array.isArray(TAIFEX_DATA))return TAIFEX_DATA;if(window.TAIFEXDATA&&Array.isArray(window.TAIFEXDATA))return window.TAIFEXDATA;if(window.TAIFEX_DATA&&Array.isArray(window.TAIFEX_DATA))return window.TAIFEX_DATA;return null}
 function renderUpdateInfo(){const el=document.getElementById('update-info');if(!el)return;const updatedAt=window.TAIFEX_META?.updated_at||'未知';el.textContent=`資料更新時間：${updatedAt}`}
-function updateScreen(){if(!allData.length)return;let parsed;if(currentView==='inst'){const k=instSymbol==='TX'?'inst_tx':'inst_mtx';parsed=allData.filter(d=>d[k]).map(d=>({date:d.date,l:d[k].long||0,s:d[k].short||0,n:d[k].net||0}))}else if(currentView==='near'){parsed=allData.filter(d=>d.near).map(d=>({date:d.date,top5l:d.near.top5_l||0,top5s:d.near.top5_s||0,top5n:d.near.top5_net||0,top10l:d.near.top10_l||0,top10s:d.near.top10_s||0,top10n:d.near.top10_net||0}))}else{parsed=allData.filter(d=>d.allm).map(d=>({date:d.date,top5l:d.allm.top5_l||0,top5s:d.allm.top5_s||0,top5n:d.allm.top5_net||0,top10l:d.allm.top10_l||0,top10s:d.allm.top10_s||0,top10n:d.allm.top10_net||0}))}if(!parsed.length){showStatus('目前沒有可顯示資料，請確認 taifex_data.js');return}let sliced=parsed;if(activeR!=='all'){const cut=new Date();cut.setMonth(cut.getMonth()-activeR);sliced=parsed.filter(d=>{const dt=parseDateSafe(d.date);return dt&&dt>=cut})}if(!sliced.length)sliced=parsed.slice(0,250);const latest=sliced[0];const rangeText=getRangeText(sliced);if(currentView==='inst'){setCard(1,'淨口數',latest.n,latest.date,latest.n>=0?'bull':'bear');setCard(2,'正值天數',sliced.filter(x=>x.n>=0).length,'區間統計','bull');setCard(3,'多單口數',latest.l,'最新資料','gray');setCard(4,'空單口數',latest.s,'最新資料','gray')}else{setCard(1,'前5大淨口數',latest.top5n,latest.date,latest.top5n>=0?'bull':'bear');setCard(2,'前10大淨口數',latest.top10n,latest.date,latest.top10n>=0?'bull':'bear');setCard(3,'前5大多單',latest.top5l,'最新資料','gray');setCard(4,'前5大空單',latest.top5s,'最新資料','gray')}const container=document.getElementById('charts-container');destroyAllCharts();const labels=sliced.map(d=>d.date);if(currentView==='inst'){container.innerHTML=`<div class="chart-grid-2">${chartBoxHTML('inst-net',`${instSymbol} 淨口數`,rangeText,'正值','負值')}${chartBoxHTML('inst-ov',`${instSymbol} 多空口數`,rangeText,'多單','空單')}</div>`;buildNetChart('canvas-inst-net',labels,sliced.map(d=>d.n));buildOverlapChart('canvas-inst-ov',sliced,'l','s')}else{const lbl=currentView==='near'?'近月':'全月';container.innerHTML=`<div class="chart-grid-2">${chartBoxHTML('top5-net',`${lbl}前5大淨口數`,rangeText,'正值','負值')}${chartBoxHTML('top5-ov',`${lbl}前5大多空口數`,rangeText,'多單','空單')}${chartBoxHTML('top10-net',`${lbl}前10大淨口數`,rangeText,'正值','負值')}${chartBoxHTML('top10-ov',`${lbl}前10大多空口數`,rangeText,'多單','空單')}</div>`;buildNetChart('canvas-top5-net',labels,sliced.map(d=>d.top5n));buildOverlapChart('canvas-top5-ov',sliced,'top5l','top5s');buildNetChart('canvas-top10-net',labels,sliced.map(d=>d.top10n));buildOverlapChart('canvas-top10-ov',sliced,'top10l','top10s')}hideStatus()}
+
+function updateScreen(){
+  if(!allData.length)return;
+  let parsed;
+  if(currentView==='inst'){const k=instSymbol==='TX'?'inst_tx':'inst_mtx';parsed=allData.filter(d=>d[k]).map(d=>({date:d.date,l:d[k].long||0,s:d[k].short||0,n:d[k].net||0}))}
+  else if(currentView==='near'){parsed=allData.filter(d=>d.near).map(d=>({date:d.date,top5l:d.near.top5_l||0,top5s:d.near.top5_s||0,top5n:d.near.top5_net||0,top10l:d.near.top10_l||0,top10s:d.near.top10_s||0,top10n:d.near.top10_net||0}))}
+  else{parsed=allData.filter(d=>d.allm).map(d=>({date:d.date,top5l:d.allm.top5_l||0,top5s:d.allm.top5_s||0,top5n:d.allm.top5_net||0,top10l:d.allm.top10_l||0,top10s:d.allm.top10_s||0,top10n:d.allm.top10_net||0}))}
+  if(!parsed.length){showStatus('目前沒有可顯示資料，請確認 taifex_data.js');return}
+  let sliced=parsed;
+  if(activeR!=='all'){const cut=new Date();cut.setMonth(cut.getMonth()-activeR);sliced=parsed.filter(d=>{const dt=parseDateSafe(d.date);return dt&&dt>=cut})}
+  if(!sliced.length)sliced=parsed.slice(0,250);
+  const latest=sliced[0];const rangeText=getRangeText(sliced);
+  if(currentView==='inst'){setCard(1,'淨口數',latest.n,latest.date,latest.n>=0?'bull':'bear');setCard(2,'正值天數',sliced.filter(x=>x.n>=0).length,'區間統計','bull');setCard(3,'多單口數',latest.l,'最新資料','gray');setCard(4,'空單口數',latest.s,'最新資料','gray')}
+  else{setCard(1,'前5大淨口數',latest.top5n,latest.date,latest.top5n>=0?'bull':'bear');setCard(2,'前10大淨口數',latest.top10n,latest.date,latest.top10n>=0?'bull':'bear');setCard(3,'前5大多單',latest.top5l,'最新資料','gray');setCard(4,'前5大空單',latest.top5s,'最新資料','gray')}
+  const container=document.getElementById('charts-container');
+  destroyAllCharts();
+  const labels=sliced.map(d=>d.date);
+  if(currentView==='inst'){
+    container.innerHTML=`<div class="chart-grid-2">${chartBoxHTML('inst-net',`${instSymbol} 淨口數`,rangeText,'正值','負值')}${chartBoxHTML('inst-ov',`${instSymbol} 多空口數`,rangeText,'多單','空單')}</div>`;
+    buildNetChart('canvas-inst-net',labels,sliced.map(d=>d.n));
+    buildOverlapChart('canvas-inst-ov',sliced,'l','s')
+  }else{
+    const lbl=currentView==='near'?'近月':'全月';
+    container.innerHTML=`<div class="chart-grid-2">${chartBoxHTML('top5-net',`${lbl}前5大淨口數`,rangeText,'正值','負值')}${chartBoxHTML('top5-ov',`${lbl}前5大多空口數`,rangeText,'多單','空單')}${chartBoxHTML('top10-net',`${lbl}前10大淨口數`,rangeText,'正值','負值')}${chartBoxHTML('top10-ov',`${lbl}前10大多空口數`,rangeText,'多單','空單')}</div>`;
+    buildNetChart('canvas-top5-net',labels,sliced.map(d=>d.top5n));
+    buildOverlapChart('canvas-top5-ov',sliced,'top5l','top5s');
+    buildNetChart('canvas-top10-net',labels,sliced.map(d=>d.top10n));
+    buildOverlapChart('canvas-top10-ov',sliced,'top10l','top10s')
+  }
+  hideStatus()
+}
+
 function switchMainView(view){currentView=view;document.querySelectorAll('#main-view-switcher .s-tab').forEach(b=>b.classList.toggle('on',b.dataset.view===view));document.getElementById('inst-sub-tabs').style.display=view==='inst'?'block':'none';updateScreen()}
 function switchInstSymbol(sym){instSymbol=sym;document.getElementById('btn-sym-tx').classList.toggle('on',sym==='TX');document.getElementById('btn-sym-mtx').classList.toggle('on',sym==='MTX');updateScreen()}
 function setR(m,el){activeR=m;document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));el.classList.add('on');updateScreen()}
-window.onload=async function(){try{await loadTaifexScript()}catch(e){showStatus('taifex_data.js 載入失敗');return}const source=resolveDataSource();if(!source){showStatus('找不到 taifex_data.js 資料（請確認 window.TAIFEX_DATA）');return}allData=source.slice();renderUpdateInfo();updateScreen()};
+
+window.onload=async function(){
+  try{await loadTaifexScript()}catch(e){showStatus('taifex_data.js 載入失敗');return}
+  const source=resolveDataSource();
+  if(!source){showStatus('找不到 taifex_data.js 資料（請確認 window.TAIFEX_DATA）');return}
+  allData=source.slice();renderUpdateInfo();updateScreen()
+};
 </script>
- <footer class="site-footer">
+
+<footer class="site-footer">
   <p>自動更新時間 : 周一 ~ 周五 15:30、16:30 &nbsp;&nbsp;&nbsp;&nbsp;by cron-job.org</p>
 </footer>
-
 <style>
-.site-footer{
-  position: relative;
-  z-index: 1;
-  max-width: 1100px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 18px 14px 28px;
-  border-top: 1px solid var(--bdr);
-  text-align: left;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.8;
-}
+.site-footer{position:relative;z-index:1;max-width:1100px;width:100%;margin:0 auto;padding:18px 14px 28px;border-top:1px solid var(--bdr);text-align:left;color:var(--muted);font-size:14px;line-height:1.8}
 .site-footer p{margin:0}
 </style>
 </body>
